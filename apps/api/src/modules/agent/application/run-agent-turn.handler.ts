@@ -74,6 +74,7 @@ import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
 import { AgentErrors } from '../domain/agent-errors';
 import type {
+  AgentEvent,
   AgentSource,
   AgentTurnUsage,
   WebSource,
@@ -94,6 +95,7 @@ import {
   firstCallRoom,
 } from '../domain/first-call-budget';
 import { isRecallableMemory } from '../domain/memory-content-policy';
+import { readsForeignContent } from '../domain/memory-taint';
 import { estimateMessageTokens } from '../domain/message-tokens';
 import {
   AGENT_ORCHESTRATOR,
@@ -171,6 +173,7 @@ type TurnInput = Omit<
   /** Which part of the answer to a user message this turn is: 0 for the message's own turn, n for its nth continuation. */
   readonly segmentIndex: number;
   readonly priorModel?: string;
+  readonly historyReadForeignContent?: boolean;
 };
 
 export interface RunAgentTurnCallbacks {
@@ -197,6 +200,8 @@ export interface RunAgentTurnCallbacks {
   readonly onProposal: (event: {
     proposal: ProposedMutation;
     memories: readonly RecalledMemory[];
+    /** Share proposals only: the model had read content someone other than the user may have written when it proposed. */
+    readForeignContent?: boolean;
   }) => void;
   /** Fires once, just before the model runs, when the turn named no conversation, with the one it opened; the id must not wait for `done`. A turn refused before the model runs keeps no conversation, so it announces none. */
   readonly onConversation?: (conversationId: string) => void;
@@ -237,7 +242,7 @@ interface PersistenceContext {
 
 interface TurnLoopPolicy {
   readonly onProposal: (
-    event: { proposal: ProposedMutation; usage: AgentTurnUsage },
+    event: Extract<AgentEvent, { type: 'proposal' }>,
     ctx: TurnLoopContext
   ) => Promise<TurnEventOutcome>;
   readonly consumesQuota: boolean;
@@ -279,6 +284,7 @@ type PreparedTurn =
 
 export const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 const FIRST_CALL_UNAFFORDABLE_EVENT = 'agent.turn.first_call_unaffordable';
+const KNOWN_NOTE_TITLE_BLOCKED_EVENT = 'agent.known_notes.title_blocked';
 const AGENT_HISTORY_TOOL_TURNS = 2;
 const MAX_USER_MESSAGE_CHARS = MAX_GUARD_INPUT_CHARS;
 function detectionRows(
@@ -417,6 +423,9 @@ export class RunAgentTurnHandler {
         callbacks.onProposal({
           proposal: event.proposal,
           memories: ctx.memories,
+          ...(event.readForeignContent !== undefined && {
+            readForeignContent: event.readForeignContent,
+          }),
         });
         return 'stop';
       },
@@ -460,10 +469,8 @@ export class RunAgentTurnHandler {
       if (await this.alreadyStored(conversationId, input.turnId, callbacks)) {
         return;
       }
-      const { history, knownNotes } = await this.loadConversationContext(
-        conversationId,
-        input.userId
-      );
+      const { history, knownNotes, historyReadForeignContent } =
+        await this.loadConversationContext(conversationId, input.userId);
       const synthInput: TurnInput = {
         turnId: input.turnId,
         messages: history,
@@ -472,6 +479,7 @@ export class RunAgentTurnHandler {
         memoryQuery: message.content,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         knownNotes,
+        historyReadForeignContent,
         segmentIndex: 0,
         ...(input.model ? { model: input.model } : {}),
         ...(input.effort ? { effort: input.effort } : {}),
@@ -620,6 +628,7 @@ export class RunAgentTurnHandler {
     rows: ConversationMessageRow[];
     history: AgentMessage[];
     knownNotes: AgentSource[];
+    historyReadForeignContent: boolean;
     segmentIndex: number;
   }> {
     const limit = this.configService.get('AI_AGENT_HISTORY_LIMIT');
@@ -631,23 +640,39 @@ export class RunAgentTurnHandler {
     const history = pruneTranscript(rows, {
       keepToolTurns: AGENT_HISTORY_TOOL_TURNS,
     });
-    const seen = new Map<string, AgentSource>();
-    for (const r of rows) {
-      if (r.role !== 'assistant') {
-        continue;
-      }
-      for (const s of r.sources) {
-        if (!seen.has(s.id)) {
-          seen.set(s.id, s);
-        }
-      }
-    }
     return {
       rows,
       history,
-      knownNotes: [...seen.values()],
+      knownNotes: this.knownNotesOf(rows),
+      historyReadForeignContent: readsForeignContent(rows),
       segmentIndex: segmentIndexOf(rows),
     };
+  }
+
+  private knownNotesOf(rows: readonly ConversationMessageRow[]): AgentSource[] {
+    const known = new Map<string, AgentSource | null>();
+    for (const row of rows) {
+      if (row.role !== 'assistant') {
+        continue;
+      }
+      for (const source of row.sources) {
+        if (known.has(source.id)) {
+          continue;
+        }
+        const check = detectPromptInjection(source.title);
+        if (!check.safe) {
+          this.logger.warn({
+            event: KNOWN_NOTE_TITLE_BLOCKED_EVENT,
+            noteId: source.id,
+            score: check.score,
+          });
+        }
+        known.set(source.id, check.safe ? source : null);
+      }
+    }
+    return [...known.values()].filter(
+      (note): note is AgentSource => note !== null
+    );
   }
 
   private async persistTurn(
@@ -866,6 +891,7 @@ export class RunAgentTurnHandler {
         execution,
         continuation: true,
         knownNotes: context.knownNotes,
+        historyReadForeignContent: context.historyReadForeignContent,
         segmentIndex,
         conversationModel: found.model,
         ...(last.model ? { priorModel: last.model } : {}),
@@ -1109,6 +1135,9 @@ export class RunAgentTurnHandler {
         openrouterIgnoredProviders: prepared.openrouterIgnoredProviders,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
+        ...(input.historyReadForeignContent
+          ? { historyReadForeignContent: true }
+          : {}),
         ...(prepared.userMemories.length
           ? {
               userMemories: prepared.userMemories.map(

@@ -208,3 +208,55 @@ describe('AgentProposalCard', () => {
     expectLinkNavigationBlocked(region, 'plain');
   });
 });
+
+describe('AgentProposalCard after content someone else wrote', () => {
+  const share: PendingProposal = {
+    id: 'p2',
+    kind: 'share',
+    targetNoteId: 'n1',
+    payload: { targetEmail: 'colleague@example.com', permission: 'viewer' },
+  };
+  const WARNING =
+    /check the recipient|revisa el destinatario|foreignContentWarning/i;
+
+  it('warns to check the recipient of a share proposed after it', () => {
+    render(
+      <AgentProposalCard
+        proposal={{ ...share, readForeignContent: true }}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(WARNING);
+  });
+
+  it.each([
+    ['marked clean', { ...share, readForeignContent: false }],
+    ['unmarked, as an older server sends it', share],
+  ])('shows no warning on a share %s', (_what, unmarked) => {
+    render(
+      <AgentProposalCard
+        proposal={unmarked}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
+  });
+
+  it('shows no warning on another kind of proposal, even when marked', () => {
+    render(
+      <AgentProposalCard
+        proposal={{ ...proposal, readForeignContent: true }}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
+  });
+});

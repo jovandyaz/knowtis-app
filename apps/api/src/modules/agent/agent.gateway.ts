@@ -362,6 +362,7 @@ export class AgentGateway
     const onProposal: RunAgentTurnCallbacks['onProposal'] = ({
       proposal,
       memories,
+      readForeignContent,
     }) =>
       client.emit('agent:proposal', {
         turnId,
@@ -371,6 +372,7 @@ export class AgentGateway
         summary: proposal.summary,
         payload: proposal.payload,
         memories,
+        ...(readForeignContent !== undefined && { readForeignContent }),
       });
     const turn = {
       userId,

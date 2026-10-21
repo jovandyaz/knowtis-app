@@ -1714,6 +1714,29 @@ describe('AgentGateway', () => {
       );
     });
 
+    it('sends whether a share proposal came after content someone else wrote', async () => {
+      const proposal = ProposedMutation.create({
+        id: '77777777-7777-4777-8777-777777777777',
+        kind: 'share',
+        targetNoteId: '88888888-8888-4888-8888-888888888888',
+        payload: { targetEmail: 'colleague@example.com', permission: 'viewer' },
+        summary: 'Share note',
+      })._unsafeUnwrap();
+      const execute = vi.fn<Execute>(async (_input, cb) => {
+        cb.onModelStart?.();
+        cb.onProposal({ proposal, memories: [], readForeignContent: true });
+      });
+      const gateway = makeGateway({ handler: { execute } as never });
+      const client = makeClient('u1');
+
+      await gateway.handleMessage(client as never, turn());
+
+      expect(client.emit).toHaveBeenCalledWith(
+        'agent:proposal',
+        expect.objectContaining({ id: proposal.id, readForeignContent: true })
+      );
+    });
+
     it('resumes an approved proposal under the turn that proposed it, and echoes that id', async () => {
       const resumeTurn = vi.fn<Execute>(async (_input, cb) => {
         cb.onChunk('done');

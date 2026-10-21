@@ -121,7 +121,8 @@ function isEditableByOthers(entry: unknown): boolean {
   );
 }
 
-function isWithheldRead(entry: unknown): boolean {
+/** Whether a note a tool result lists is a read whose body the injection guard withheld. */
+export function isWithheldRead(entry: unknown): boolean {
   return (
     hasProperty(entry, 'contentStatus') &&
     entry.contentStatus === WITHHELD_STATUS
@@ -173,6 +174,27 @@ function partTaints(part: AgentMessagePart): MemoryTaintReason[] {
     return isUnavailableInput(part.input) ? [UNAVAILABLE_NOTE] : [];
   }
   return resultTaints(part.output);
+}
+
+interface TranscriptEntry {
+  readonly role: AgentRole;
+  readonly parts?: readonly AgentMessagePart[] | null;
+}
+
+/**
+ * Whether a tool call or result in `messages` may carry words someone other than the user wrote: web
+ * content, a note that is someone else's, that someone else can edit, or that was withheld or became
+ * unavailable, or a tool outside {@link MEMORY_SAFE_TOOLS} and {@link MEMORY_WEB_TOOLS}. These are the
+ * per-part rules of {@link memoryTranscript}, judged from what each result reported when it was read.
+ */
+export function readsForeignContent(
+  messages: readonly TranscriptEntry[]
+): boolean {
+  return messages.some(
+    (message) =>
+      message.role !== USER_ROLE &&
+      (message.parts ?? []).some((part) => partTaints(part).length > 0)
+  );
 }
 
 function carriesToolResult(row: ConversationMessageRow): boolean {
