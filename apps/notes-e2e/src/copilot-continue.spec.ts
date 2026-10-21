@@ -4,11 +4,8 @@ import { z } from 'zod';
 import { MESSAGE_KIND } from '@knowtis/shared-types';
 
 import { test } from './fixtures/conversations.fixture';
-import {
-  openCopilotDock,
-  scriptAgent,
-  type ScriptedAgent,
-} from './fixtures/copilot.fixture';
+import { openCopilotDock, scriptAgent } from './fixtures/copilot.fixture';
+import type { ScriptedSocket } from './fixtures/scripted-socket.fixture';
 
 const CONTINUE_RE = /^(continue|continuar)$/i;
 const PARTIAL_RE = /^(partial answer|resultado parcial)$/i;
@@ -44,13 +41,13 @@ function done(turnId: string, conversationId: string, capped: boolean) {
   };
 }
 
-function messagesSent(agent: ScriptedAgent): unknown[] {
+function messagesSent(agent: ScriptedSocket): unknown[] {
   return agent.sent
     .filter((item) => item.event === 'agent:message')
     .map((item) => item.payload);
 }
 
-async function nthMessageSent(agent: ScriptedAgent, count: number) {
+async function nthMessageSent(agent: ScriptedSocket, count: number) {
   await expect.poll(() => messagesSent(agent).length).toBe(count);
   return messagesSent(agent)[count - 1];
 }

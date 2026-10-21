@@ -1,11 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
-import {
-  openCopilotDock,
-  scriptAgent,
-  test,
-  type ScriptedAgent,
-} from './fixtures/copilot.fixture';
+import { openCopilotDock, scriptAgent, test } from './fixtures/copilot.fixture';
+import type { ScriptedSocket } from './fixtures/scripted-socket.fixture';
 
 const QUEUED_RE = /queued|en cola/i;
 const SEND_NOW_RE = /send now|enviar ahora/i;
@@ -35,21 +31,21 @@ interface SentMessage {
   conversationId?: string;
 }
 
-function messagesSent(agent: ScriptedAgent): SentMessage[] {
+function messagesSent(agent: ScriptedSocket): SentMessage[] {
   return agent.sent
     .filter((item) => item.event === 'agent:message')
     .map((item) => item.payload as SentMessage);
 }
 
-function sentTexts(agent: ScriptedAgent): string[] {
+function sentTexts(agent: ScriptedSocket): string[] {
   return messagesSent(agent).map((item) => item.message.content);
 }
 
-function cancelCount(agent: ScriptedAgent): number {
+function cancelCount(agent: ScriptedSocket): number {
   return agent.sent.filter((item) => item.event === 'agent:cancel').length;
 }
 
-function turnSockets(agent: ScriptedAgent): number[] {
+function turnSockets(agent: ScriptedSocket): number[] {
   return agent.sent
     .filter((item) => item.event === 'agent:message')
     .map((item) => item.socket);
@@ -57,7 +53,7 @@ function turnSockets(agent: ScriptedAgent): number[] {
 
 // Whether the client cancels a turn depends on the server having acknowledged
 // it yet; the server aborts it on either agent:cancel or its socket closing.
-function abortedTurns(agent: ScriptedAgent): string[] {
+function abortedTurns(agent: ScriptedSocket): string[] {
   return agent.sent.flatMap((item, index) => {
     if (item.event !== 'agent:message') {
       return [];
@@ -81,7 +77,7 @@ function startAnsweringTurn(page: Page) {
   });
 }
 
-async function askFirstQuestion(page: Page, agent: ScriptedAgent) {
+async function askFirstQuestion(page: Page, agent: ScriptedSocket) {
   const composer = await openCopilotDock(page);
   await composer.fill(FIRST_QUESTION);
   await page.keyboard.press('Enter');
