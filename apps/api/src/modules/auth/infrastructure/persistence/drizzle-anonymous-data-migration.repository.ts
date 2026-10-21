@@ -30,11 +30,15 @@ export class DrizzleAnonymousDataMigrationRepository {
     registeredUserId: string
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // Locks the guest row before its notes, the order capped note writes take,
+      // so a racing write waits out the merge instead of deadlocking it or adding
+      // a note the delete below would cascade away.
       const [anonUser] = await tx
         .select({ id: users.id })
         .from(users)
         .where(and(eq(users.id, anonymousUserId), eq(users.isAnonymous, true)))
-        .limit(1);
+        .limit(1)
+        .for('update');
 
       if (!anonUser) {
         throw new BadRequestException('Source user is not an anonymous user');
