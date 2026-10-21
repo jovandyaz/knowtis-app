@@ -16,6 +16,8 @@ import { UNTRUSTED_MARKDOWN_PROPS } from '@knowtis/editor';
 
 import { aiErrorMessageKey } from './ai-error-messages';
 
+const DEFAULT_WIDTH_PX = 420;
+
 interface AIStreamingPreviewProps {
   width?: number;
   onReplace: (text: string) => void;
@@ -40,10 +42,10 @@ export function AIStreamingPreview({
     <div
       aria-busy={status === 'streaming'}
       className={cn(
-        'rounded-xl border border-primary/20 border-t-2 border-t-primary/30 bg-popover/95 shadow-[0_0_30px_-8px] shadow-primary/25 backdrop-blur-xl',
+        'max-w-[calc(100vw-1rem)] rounded-xl border border-primary/20 border-t-2 border-t-primary/30 bg-popover/95 shadow-[0_0_30px_-8px] shadow-primary/25 backdrop-blur-xl',
         'animate-drop-in motion-reduce:animate-none'
       )}
-      style={width ? { width: `${width}px` } : { width: 420, maxWidth: '90vw' }}
+      style={{ width: width ? `${width}px` : DEFAULT_WIDTH_PX }}
     >
       {(status === 'streaming' || status === 'done') && (
         <div
@@ -100,8 +102,8 @@ export function AIStreamingPreview({
         )}
 
         {status === 'done' && streamedText && (
-          <div className="flex w-full items-center justify-between">
-            <div className="flex items-center gap-1 rounded-full bg-muted/50 p-1">
+          <div className="flex w-full flex-wrap items-center justify-between gap-y-1">
+            <div className="flex flex-wrap items-center gap-1 rounded-2xl bg-muted/50 p-1">
               <Button
                 variant="default"
                 size="sm"
