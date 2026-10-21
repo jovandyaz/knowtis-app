@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { useEffect, type ReactElement } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -8,8 +8,10 @@ import { act, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ApiClientModule from '@knowtis/api-client';
-import { notesApi } from '@knowtis/api-client';
+import { ApiClientError, notesApi } from '@knowtis/api-client';
 import type * as DataAccessNotesModule from '@knowtis/data-access-notes';
+import { useCreateNote } from '@knowtis/data-access-notes';
+import { ANONYMOUS_NOTE_LIMIT_CODE } from '@knowtis/shared-types';
 
 import { NoteEditorPage } from './NoteEditorPage';
 
@@ -131,7 +133,7 @@ vi.mock('@knowtis/api-client', async (importOriginal) => {
   const actual = await importOriginal<typeof ApiClientModule>();
   return {
     ...actual,
-    notesApi: { ...actual.notesApi, update: vi.fn() },
+    notesApi: { ...actual.notesApi, update: vi.fn(), create: vi.fn() },
   };
 });
 
@@ -201,5 +203,80 @@ describe('NoteEditorPage save ordering', () => {
     });
 
     expect(saveState()).toBe('error');
+  });
+
+  describe('while the note is still being created', () => {
+    const TYPED = '<p>typed while the note was created</p>';
+    let settleCreate: {
+      resolve: () => void;
+      reject: (error: Error) => void;
+    };
+
+    function CreatingNote() {
+      const { mutate } = useCreateNote();
+      useEffect(() => {
+        mutate({ id: 'note-1', title: 'Untitled', content: '' });
+      }, [mutate]);
+      return null;
+    }
+
+    beforeEach(() => {
+      vi.mocked(notesApi.create).mockReset();
+      vi.mocked(notesApi.create).mockReturnValue(
+        new Promise((resolve, reject) => {
+          settleCreate = {
+            resolve: () => resolve({ id: 'note-1' } as never),
+            reject,
+          };
+        })
+      );
+    });
+
+    const renderCreatingNote = () =>
+      renderWithClient(
+        <>
+          <CreatingNote />
+          <NoteEditorPage />
+        </>
+      );
+
+    it('holds a save until the server confirms the note', async () => {
+      renderCreatingNote();
+
+      await edit(TYPED);
+      await runDebounce();
+      expect(notesApi.update).not.toHaveBeenCalled();
+
+      await act(async () => {
+        settleCreate.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(notesApi.update).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(notesApi.update).mock.calls[0]?.slice(0, 2)).toEqual([
+        'note-1',
+        { content: TYPED },
+      ]);
+    });
+
+    it('drops the save when the server refuses to create the note', async () => {
+      renderCreatingNote();
+
+      await edit(TYPED);
+      await runDebounce();
+      await act(async () => {
+        settleCreate.reject(
+          new ApiClientError(
+            'Guest note limit reached',
+            403,
+            ANONYMOUS_NOTE_LIMIT_CODE
+          )
+        );
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(notesApi.update).not.toHaveBeenCalled();
+      expect(saveState()).toBe('idle');
+    });
   });
 });

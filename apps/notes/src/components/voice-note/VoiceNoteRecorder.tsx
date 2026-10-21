@@ -6,9 +6,11 @@ import { useNavigate } from '@tanstack/react-router';
 import { ROUTES } from '@/config';
 import { useVoiceNote, useVoiceRecorder } from '@/hooks';
 import { sanitizeAiHtml } from '@/lib/sanitize-ai-html';
+import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { isAnonymousNoteLimitError } from '@knowtis/api-client';
 import { useCreateNote } from '@knowtis/data-access-notes';
 import {
   AudioWaveform,
@@ -207,9 +209,12 @@ export function VoiceNoteRecorder({
           });
         },
         onError: (error) => {
-          toast.error(
-            error instanceof Error ? error.message : t('create.failedToCreate')
-          );
+          if (isAnonymousNoteLimitError(error)) {
+            useAnonymousLimitStore.getState().openModal();
+            return;
+          }
+          console.error('[VoiceNoteRecorder] Failed to create note:', error);
+          toast.error(t('create.failedToCreate'));
         },
       }
     );

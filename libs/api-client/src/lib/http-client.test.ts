@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+import {
+  ANONYMOUS_NOTE_LIMIT_CODE,
+  EMAIL_NOT_VERIFIED_CODE,
+} from '@knowtis/shared-types';
 
 import {
   ApiClientError,
   HttpClient,
+  isAnonymousNoteLimitError,
   isClientError,
   isEmailNotVerifiedError,
   retryAfterMsOf,
@@ -349,6 +353,51 @@ describe('isEmailNotVerifiedError', () => {
     expect(isEmailNotVerifiedError(new Error('boom'))).toBe(false);
     expect(isEmailNotVerifiedError(null)).toBe(false);
     expect(isEmailNotVerifiedError(undefined)).toBe(false);
+  });
+});
+
+describe('isAnonymousNoteLimitError', () => {
+  it('recognizes the guest note limit the API answers a create or restore with', () => {
+    expect(
+      isAnonymousNoteLimitError(
+        new ApiClientError(
+          'Guest note limit reached',
+          403,
+          ANONYMOUS_NOTE_LIMIT_CODE
+        )
+      )
+    ).toBe(true);
+  });
+
+  it('rejects another 403 so an ordinary permission denial is not mistaken for it', () => {
+    expect(
+      isAnonymousNoteLimitError(
+        new ApiClientError('Forbidden', 403, 'NOTE_ACCESS_DENIED')
+      )
+    ).toBe(false);
+  });
+
+  it('rejects the code at a status the limit is never answered with', () => {
+    expect(
+      isAnonymousNoteLimitError(
+        new ApiClientError('Conflict', 409, ANONYMOUS_NOTE_LIMIT_CODE)
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a look-alike that is not an ApiClientError', () => {
+    expect(
+      isAnonymousNoteLimitError({
+        status: 403,
+        code: ANONYMOUS_NOTE_LIMIT_CODE,
+      })
+    ).toBe(false);
+  });
+
+  it('rejects the values a rejected promise can hand a catch block', () => {
+    expect(isAnonymousNoteLimitError(new Error('boom'))).toBe(false);
+    expect(isAnonymousNoteLimitError(null)).toBe(false);
+    expect(isAnonymousNoteLimitError(undefined)).toBe(false);
   });
 });
 

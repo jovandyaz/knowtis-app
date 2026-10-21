@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from '@tanstack/react-router';
 
 import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
@@ -43,7 +44,11 @@ import { ApiClientError } from '@knowtis/api-client';
 import { docStateToBase64, useYjs } from '@knowtis/crdt';
 import { useArtifacts } from '@knowtis/data-access-artifacts';
 import { useFeatureFlags } from '@knowtis/data-access-feature-flags';
-import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
+import {
+  useNote,
+  useUpdateNote,
+  whenNoteCreated,
+} from '@knowtis/data-access-notes';
 import { Button, ErrorState, Input } from '@knowtis/design-system';
 import { useDebouncedMerge, useLatestRef } from '@knowtis/shared-hooks';
 import {
@@ -131,6 +136,7 @@ function NoteEditor({
     reportEditRef.current = suggestion.reportEdit;
   }, [suggestion.reportEdit]);
   const updateNote = useUpdateNote();
+  const queryClient = useQueryClient();
   const { getYDoc } = useYjs();
   const refreshNotesList = useNotesListRefresh();
   const isNewNote = useMemo(() => !initialContent, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -158,25 +164,33 @@ function NoteEditor({
 
   const debouncedSave = useDebouncedMerge<NoteUpdateDraft>((updates) => {
     setSaveState('saving');
-    // Content saves carry the doc's own CRDT state: the server stores it
-    // verbatim, so it never mints a parallel history from the HTML — the
-    // root cause of notes duplicating on reload.
-    updateNote.mutate(
-      {
-        id: noteId,
-        input: updates,
-        ...(updates.content !== undefined
-          ? { yjsState: docStateToBase64(getYDoc(noteId)) }
-          : {}),
-      },
-      {
-        // A newer edit queued mid-flight leaves the state on `pending`, and
-        // this success does not speak for it.
-        onSuccess: () =>
-          setSaveState((current) => (current === 'saving' ? 'saved' : current)),
-        onError: () => setSaveState('error'),
+    void whenNoteCreated(queryClient, noteId).then((created) => {
+      if (!created) {
+        setSaveState('idle');
+        return;
       }
-    );
+      // Content saves carry the doc's own CRDT state: the server stores it
+      // verbatim, so it never mints a parallel history from the HTML — the
+      // root cause of notes duplicating on reload.
+      updateNote.mutate(
+        {
+          id: noteId,
+          input: updates,
+          ...(updates.content !== undefined
+            ? { yjsState: docStateToBase64(getYDoc(noteId)) }
+            : {}),
+        },
+        {
+          // A newer edit queued mid-flight leaves the state on `pending`, and
+          // this success does not speak for it.
+          onSuccess: () =>
+            setSaveState((current) =>
+              current === 'saving' ? 'saved' : current
+            ),
+          onError: () => setSaveState('error'),
+        }
+      );
+    });
   }, DEBOUNCE_DELAYS.AUTO_SAVE);
 
   const queueSave = useCallback(

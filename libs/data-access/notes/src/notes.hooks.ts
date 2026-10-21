@@ -19,6 +19,7 @@ import {
   mapLoadedNotes,
   type NoteListPages,
 } from './note-cache';
+import { createNoteMutationKey } from './note-creation';
 import {
   dropNoteQueries,
   resumeNoteQueries,
@@ -95,6 +96,7 @@ export function useCreateNote() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: createNoteMutationKey,
     mutationFn: (input: CreateNoteInput) => notesApi.create(input),
     onSuccess: (newNote: Note) => {
       queryClient.invalidateQueries({

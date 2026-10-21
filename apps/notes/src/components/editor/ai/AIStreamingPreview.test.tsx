@@ -1,5 +1,5 @@
 import { useAIStore } from '@/stores/ai.store';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AIStreamingPreview } from './AIStreamingPreview';
@@ -50,4 +50,50 @@ describe('AIStreamingPreview', () => {
       expect(container.textContent).toContain(RAW_SCRIPT);
     }
   );
+
+  describe('on a narrow screen', () => {
+    const EDITOR_WIDTH_PX = 600;
+    const VIEWPORT_CAP = 'max-w-[calc(100vw-1rem)]';
+
+    it.each([
+      ['the editor width it is given', EDITOR_WIDTH_PX],
+      ['its default width', undefined],
+    ])('keeps %s inside the viewport', (_, width) => {
+      useAIStore.setState({ status: 'done', streamedText: LAST_LINE });
+
+      const { container } = render(
+        <AIStreamingPreview
+          {...(width && { width })}
+          onReplace={vi.fn()}
+          onInsertBelow={vi.fn()}
+          onDiscard={vi.fn()}
+        />
+      );
+
+      expect(container.firstElementChild).toHaveClass(VIEWPORT_CAP);
+    });
+
+    it('wraps the actions of a finished answer instead of overflowing', () => {
+      useAIStore.setState({ status: 'done', streamedText: LAST_LINE });
+
+      render(
+        <AIStreamingPreview
+          width={EDITOR_WIDTH_PX}
+          onReplace={vi.fn()}
+          onInsertBelow={vi.fn()}
+          onDiscard={vi.fn()}
+        />
+      );
+
+      const answerActions = screen.getByRole('button', {
+        name: 'ai.preview.replace',
+      }).parentElement;
+      const discardAction = screen.getByRole('button', {
+        name: 'ai.preview.discard',
+      }).parentElement;
+      expect(answerActions).toHaveClass('flex-wrap');
+      expect(answerActions?.parentElement).toHaveClass('flex-wrap');
+      expect(answerActions?.parentElement).toContainElement(discardAction);
+    });
+  });
 });

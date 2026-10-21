@@ -14,6 +14,7 @@ import {
 } from '@knowtis/api-client';
 import { DEFAULT_NOTES_PAGE_SIZE } from '@knowtis/shared-types';
 
+import { whenNoteCreated } from './note-creation';
 import {
   useCreateNote,
   useDeleteNote,
@@ -212,6 +213,76 @@ describe('Notes Hooks', () => {
       });
 
       expect(notesApi.create).toHaveBeenCalledWith({ title: 'New Note' });
+    });
+  });
+
+  describe('whenNoteCreated', () => {
+    function deferredCreate() {
+      let settle: { resolve: () => void; reject: (error: Error) => void } = {
+        resolve: () => undefined,
+        reject: () => undefined,
+      };
+      vi.mocked(notesApi.create).mockReturnValue(
+        new Promise((resolve, reject) => {
+          settle = {
+            resolve: () => resolve({ id: 'n1' } as never),
+            reject,
+          };
+        })
+      );
+      return () => settle;
+    }
+
+    async function startCreate(noteId: string) {
+      const { result } = renderHook(() => useCreateNote(), { wrapper });
+      act(() => {
+        result.current.mutate({ id: noteId, title: 'Untitled' });
+      });
+      await waitFor(() => expect(result.current.isPending).toBe(true));
+      return result;
+    }
+
+    it('counts a note this client is not creating as held by the server', async () => {
+      await expect(whenNoteCreated(queryClient, 'n1')).resolves.toBe(true);
+    });
+
+    it('waits for the create in flight and answers true once it succeeds', async () => {
+      const settle = deferredCreate();
+      await startCreate('n1');
+      const created = vi.fn();
+
+      void whenNoteCreated(queryClient, 'n1').then(created);
+      await Promise.resolve();
+      expect(created).not.toHaveBeenCalled();
+      settle().resolve();
+
+      await waitFor(() => expect(created).toHaveBeenCalledWith(true));
+    });
+
+    it('answers false once the create in flight is refused', async () => {
+      const settle = deferredCreate();
+      await startCreate('n1');
+
+      const created = whenNoteCreated(queryClient, 'n1');
+      settle().reject(new Error('Guest note limit reached'));
+
+      await expect(created).resolves.toBe(false);
+    });
+
+    it('answers false at once for a note whose create was already refused', async () => {
+      const settle = deferredCreate();
+      const create = await startCreate('n1');
+      settle().reject(new Error('Guest note limit reached'));
+      await waitFor(() => expect(create.current.isError).toBe(true));
+
+      await expect(whenNoteCreated(queryClient, 'n1')).resolves.toBe(false);
+    });
+
+    it('does not hold a note on the create of another one', async () => {
+      deferredCreate();
+      await startCreate('n2');
+
+      await expect(whenNoteCreated(queryClient, 'n1')).resolves.toBe(true);
     });
   });
 

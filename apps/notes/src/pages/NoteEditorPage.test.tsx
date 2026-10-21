@@ -150,6 +150,7 @@ function loadNote(overrides: Partial<typeof loadedNote.data>) {
 vi.mock('@knowtis/data-access-notes', () => ({
   useNote: () => noteQuery(),
   useUpdateNote: () => ({ mutate: updateNoteMutate }),
+  whenNoteCreated: () => Promise.resolve(true),
   useDeleteNote: () => ({ mutate: vi.fn() }),
   useRestoreNote: () => ({ mutate: vi.fn() }),
   useSuggestOrganization: () => ({

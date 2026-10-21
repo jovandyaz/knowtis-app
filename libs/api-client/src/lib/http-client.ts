@@ -1,4 +1,7 @@
-import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+import {
+  ANONYMOUS_NOTE_LIMIT_CODE,
+  EMAIL_NOT_VERIFIED_CODE,
+} from '@knowtis/shared-types';
 import { DEFAULT_LOCALE, logger } from '@knowtis/shared-util';
 
 import { DEFAULT_API_CONFIG, type ApiClientConfig } from './config';
@@ -67,6 +70,7 @@ export function retryAfterMsOf(error: unknown): number | undefined {
 }
 
 const EMAIL_NOT_VERIFIED_STATUS = 403;
+const ANONYMOUS_NOTE_LIMIT_STATUS = 403;
 const CLIENT_ERROR_STATUS_MIN = 400;
 const SERVER_ERROR_STATUS_MIN = 500;
 
@@ -99,6 +103,19 @@ export function isEmailNotVerifiedError(error: unknown): boolean {
     ApiClientError.isApiClientError(error) &&
     error.status === EMAIL_NOT_VERIFIED_STATUS &&
     error.code === EMAIL_NOT_VERIFIED_CODE
+  );
+}
+
+/**
+ * True when the API refused a create or restore with 403 because a guest
+ * already holds the most notes a guest may, so the caller can offer an
+ * account instead.
+ */
+export function isAnonymousNoteLimitError(error: unknown): boolean {
+  return (
+    ApiClientError.isApiClientError(error) &&
+    error.status === ANONYMOUS_NOTE_LIMIT_STATUS &&
+    error.code === ANONYMOUS_NOTE_LIMIT_CODE
   );
 }
 

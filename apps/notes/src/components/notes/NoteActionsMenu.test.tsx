@@ -2,9 +2,13 @@ import type { ReactNode } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { ApiClientError } from '@knowtis/api-client';
+import { ANONYMOUS_NOTE_LIMIT_CODE } from '@knowtis/shared-types';
 
 import { NoteActionsMenu } from './NoteActionsMenu';
 
@@ -54,6 +58,11 @@ describe('NoteActionsMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     params.mockReturnValue({});
+    useAnonymousLimitStore.setState({ showModal: false });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('opens the menu and deletes with an undo toast', async () => {
@@ -115,6 +124,10 @@ describe('NoteActionsMenu', () => {
   });
 
   it('shows an error toast when the delete fails', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const failure = new Error('offline');
     const user = userEvent.setup();
     render(<NoteActionsMenu noteId="n1" noteTitle="My note" />, { wrapper });
 
@@ -125,14 +138,18 @@ describe('NoteActionsMenu', () => {
 
     const [, options] = deleteMutate.mock.calls[0] as [
       string,
-      { onError: () => void },
+      { onError: (error: unknown) => void },
     ];
-    options.onError();
+    options.onError(failure);
 
+    expect(consoleError).toHaveBeenCalledWith(
+      '[NoteActionsMenu] Failed to delete note:',
+      failure
+    );
     expect(toastError).toHaveBeenCalledWith('Delete failed');
   });
 
-  it('shows an error toast when the undo restore fails', async () => {
+  async function undoTheDelete() {
     const user = userEvent.setup();
     render(<NoteActionsMenu noteId="n1" noteTitle="My note" />, { wrapper });
 
@@ -155,10 +172,40 @@ describe('NoteActionsMenu', () => {
 
     const [, restoreOptions] = restoreMutate.mock.calls[0] as [
       string,
-      { onError: () => void },
+      { onError: (error: unknown) => void },
     ];
-    restoreOptions.onError();
+    return restoreOptions.onError;
+  }
 
+  it('shows an error toast when the undo restore fails', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const failure = new ApiClientError('Internal server error', 500);
+    const failRestore = await undoTheDelete();
+
+    failRestore(failure);
+
+    expect(consoleError).toHaveBeenCalledWith(
+      '[NoteActionsMenu] Failed to restore note:',
+      failure
+    );
     expect(toastError).toHaveBeenCalledWith('Restore failed');
+    expect(useAnonymousLimitStore.getState().showModal).toBe(false);
+  });
+
+  it('offers the guest-limit dialog when the undo would take a guest past the note limit', async () => {
+    const failRestore = await undoTheDelete();
+
+    failRestore(
+      new ApiClientError(
+        'Guest note limit reached',
+        403,
+        ANONYMOUS_NOTE_LIMIT_CODE
+      )
+    );
+
+    expect(useAnonymousLimitStore.getState().showModal).toBe(true);
+    expect(toastError).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ export {
   ApiClientError,
   HttpClient,
   httpClient,
+  isAnonymousNoteLimitError,
   isClientError,
   isEmailNotVerifiedError,
   retryAfterMsOf,

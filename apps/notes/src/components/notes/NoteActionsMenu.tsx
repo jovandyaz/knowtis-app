@@ -4,9 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from '@tanstack/react-router';
 
 import { ROUTES } from '@/config';
+import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { isAnonymousNoteLimitError } from '@knowtis/api-client';
 import { useDeleteNote, useRestoreNote } from '@knowtis/data-access-notes';
 import {
   Button,
@@ -40,7 +42,12 @@ export function NoteActionsMenu({
 
   const handleUndo = () => {
     restoreNote.mutate(noteId, {
-      onError: () => {
+      onError: (error) => {
+        if (isAnonymousNoteLimitError(error)) {
+          useAnonymousLimitStore.getState().openModal();
+          return;
+        }
+        console.error('[NoteActionsMenu] Failed to restore note:', error);
         toast.error(t('delete.undoError'));
       },
     });
@@ -61,7 +68,8 @@ export function NoteActionsMenu({
           duration: DELETE_TOAST_DURATION_MS,
         });
       },
-      onError: () => {
+      onError: (error) => {
+        console.error('[NoteActionsMenu] Failed to delete note:', error);
         toast.error(t('delete.error'));
       },
     });

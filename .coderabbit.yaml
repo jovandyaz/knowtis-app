@@ -8,7 +8,7 @@ tone_instructions: >
 early_access: false
 
 reviews:
-  profile: assertive
+  profile: chill
   high_level_summary: true
   review_status: true
   request_changes_workflow: false
