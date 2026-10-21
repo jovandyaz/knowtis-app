@@ -13,6 +13,8 @@ export {
 
 export { notesQueryKeys, tagsQueryKeys } from './query-keys';
 export { invalidateNoteCollections } from './note-invalidation';
+export { whenNoteCreated } from './note-creation';
+export { dropNoteQueries } from './note-deletion';
 
 export {
   dropLoadedNote,

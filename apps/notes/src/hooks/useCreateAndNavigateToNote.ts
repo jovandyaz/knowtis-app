@@ -9,16 +9,19 @@ import { captureProductEvent } from '@/lib/analytics/product-events';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
 
-import { ApiClientError, type NoteWithAccess } from '@knowtis/api-client';
+import {
+  isAnonymousNoteLimitError,
+  type NoteWithAccess,
+} from '@knowtis/api-client';
 import { artifactsQueryKeys } from '@knowtis/data-access-artifacts';
 import {
   dropLoadedNote,
+  dropNoteQueries,
   notesQueryKeys,
   prependLoadedNote,
   useCreateNote,
   type NoteListPages,
 } from '@knowtis/data-access-notes';
-import { ANONYMOUS_NOTE_LIMIT_CODE } from '@knowtis/shared-types';
 import { generateId } from '@knowtis/shared-util';
 
 interface CreateAndNavigateOptions {
@@ -100,12 +103,9 @@ export function useCreateAndNavigateToNote() {
         queryClient.cancelQueries({
           queryKey: notesQueryKeys.detail(noteId),
         });
-        queryClient.removeQueries({
-          queryKey: notesQueryKeys.detail(noteId),
-        });
-        queryClient.removeQueries({
-          queryKey: artifactsQueryKeys.byNote(noteId),
-        });
+        // The artifacts seeded above are left for the cache to collect: removed
+        // under the page still showing them, they would be fetched again.
+        dropNoteQueries(queryClient, noteId);
         queryClient.setQueriesData<NoteListPages>(
           { queryKey: notesQueryKeys.lists() },
           (old) => dropLoadedNote(old, noteId)
@@ -114,10 +114,7 @@ export function useCreateAndNavigateToNote() {
           queryKey: notesQueryKeys.lists(),
         });
 
-        if (
-          ApiClientError.isApiClientError(err) &&
-          err.code === ANONYMOUS_NOTE_LIMIT_CODE
-        ) {
+        if (isAnonymousNoteLimitError(err)) {
           options.onLimitReached();
           nav({ to: ROUTES.DASHBOARD, replace: true });
           return;

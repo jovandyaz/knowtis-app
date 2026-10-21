@@ -113,9 +113,10 @@ export function reviveNoteQueries(queryClient: QueryClient, noteId: string) {
 }
 
 /**
- * Removes a deleted note's queries. One a mounted page still observes is only
- * removed when its last observer leaves: removing it earlier makes the
- * observer rebuild it on the next render and fetch the deleted note.
+ * Removes the queries of a note the server no longer holds, deleted or never
+ * created. One a mounted page still observes is only removed when its last
+ * observer leaves: removing it earlier makes the observer rebuild it on the
+ * next render and fetch the missing note.
  */
 export function dropNoteQueries(queryClient: QueryClient, noteId: string) {
   const stop = stopOf(queryClient, noteId);
