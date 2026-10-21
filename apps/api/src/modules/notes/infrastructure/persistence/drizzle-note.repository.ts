@@ -27,7 +27,10 @@ import type {
   UpdateNoteData,
   UpsertPermissionData,
 } from '../../domain';
-import type { RotateShareTokenData } from '../../domain/ports/note-write.repository';
+import type {
+  NoteAdmission,
+  RotateShareTokenData,
+} from '../../domain/ports/note-write.repository';
 import { DrizzleNoteReadRepository } from './drizzle-note-read.repository';
 import { DrizzleNoteWriteRepository } from './drizzle-note-write.repository';
 import { DrizzlePermissionRepository } from './drizzle-permission.repository';
@@ -137,15 +140,19 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.readRepo.findByShareToken(token);
   }
 
-  create(data: CreateNoteData): Promise<Result<NoteEntity, NoteDomainError>> {
-    return this.writeRepo.create(data);
+  create(
+    data: CreateNoteData,
+    admission: NoteAdmission
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
+    return this.writeRepo.create(data, admission);
   }
 
   createWithYjsState(
     data: CreateNoteData,
-    yjsState: Buffer
+    yjsState: Buffer,
+    admission: NoteAdmission
   ): Promise<Result<NoteEntity, NoteDomainError>> {
-    return this.writeRepo.createWithYjsState(data, yjsState);
+    return this.writeRepo.createWithYjsState(data, yjsState, admission);
   }
 
   rotateShareToken(
@@ -182,9 +189,10 @@ export class DrizzleNoteRepository implements NoteRepository {
 
   restore(
     id: string,
-    ownerId: string
+    ownerId: string,
+    admission: NoteAdmission
   ): Promise<Result<NoteEntity, NoteDomainError>> {
-    return this.writeRepo.restore(id, ownerId);
+    return this.writeRepo.restore(id, ownerId, admission);
   }
 
   findPermission(

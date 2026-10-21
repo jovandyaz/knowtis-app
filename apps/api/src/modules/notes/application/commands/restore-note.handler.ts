@@ -1,6 +1,6 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
-import { err, type Result } from 'neverthrow';
+import type { Result } from 'neverthrow';
 
 import {
   NOTE_REPOSITORY,
@@ -25,12 +25,9 @@ export class RestoreNoteHandler {
   async execute(
     input: RestoreNoteInput
   ): Promise<Result<NoteEntity, NoteDomainError>> {
-    const admitted = await this.noteLimit.admit(
+    const admission = await this.noteLimit.admissionFor(
       UserId.fromTrusted(input.userId)
     );
-    if (admitted.isErr()) {
-      return err(admitted.error);
-    }
-    return this.noteRepository.restore(input.noteId, input.userId);
+    return this.noteRepository.restore(input.noteId, input.userId, admission);
   }
 }

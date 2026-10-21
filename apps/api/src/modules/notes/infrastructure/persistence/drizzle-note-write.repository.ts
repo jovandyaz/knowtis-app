@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, count, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import { databaseDiagnostics } from '../../../../core/errors/database-diagnostics';
@@ -7,6 +7,7 @@ import { stackOf } from '../../../../core/errors/stack-of';
 import {
   DATABASE_CONNECTION,
   notes,
+  users,
   type Database,
   type NewNote,
 } from '../../../../database';
@@ -19,8 +20,13 @@ import {
   type UpdateNoteContentData,
   type UpdateNoteData,
 } from '../../domain';
-import type { RotateShareTokenData } from '../../domain/ports/note-write.repository';
+import type {
+  NoteAdmission,
+  RotateShareTokenData,
+} from '../../domain/ports/note-write.repository';
 import { mapToNoteEntity } from './note-entity.mapper';
+
+type NoteWriter = Pick<Database, 'insert' | 'update'>;
 
 type NoteUpdatePayload = Omit<Partial<NewNote>, 'shareToken'> & {
   shareToken?: string | null | SQL | undefined;
@@ -67,21 +73,24 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
   ) {}
 
   async create(
-    data: CreateNoteData
+    data: CreateNoteData,
+    admission: NoteAdmission
   ): Promise<Result<NoteEntity, NoteDomainError>> {
-    return this.insertNote(data);
+    return this.insertNote(data, {}, admission);
   }
 
   async createWithYjsState(
     data: CreateNoteData,
-    yjsState: Buffer
+    yjsState: Buffer,
+    admission: NoteAdmission
   ): Promise<Result<NoteEntity, NoteDomainError>> {
-    return this.insertNote(data, { yjsState });
+    return this.insertNote(data, { yjsState }, admission);
   }
 
   private async insertNote(
     data: CreateNoteData,
-    extras: Partial<NewNote> = {}
+    extras: Partial<NewNote>,
+    admission: NoteAdmission
   ): Promise<Result<NoteEntity, NoteDomainError>> {
     try {
       const newNote: NewNote = {
@@ -92,12 +101,16 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
         ...extras,
       };
 
-      const result = await this.db.insert(notes).values(newNote).returning();
-      if (!result[0]) {
-        return err(NoteErrors.noteNotFound('Failed to create'));
-      }
-
-      return ok(mapToNoteEntity(result[0]));
+      return await this.writeAdmitted(
+        newNote.ownerId,
+        admission,
+        async (db) => {
+          const [record] = await db.insert(notes).values(newNote).returning();
+          return record
+            ? ok(mapToNoteEntity(record))
+            : err(NoteErrors.noteNotFound('Failed to create'));
+        }
+      );
     } catch (error) {
       this.logger.error(`Failed to create note`, stackOf(error));
       return err(NoteErrors.persistenceError('create', data.id ?? 'unknown'));
@@ -227,28 +240,56 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
 
   async restore(
     id: string,
-    ownerId: string
+    ownerId: string,
+    admission: NoteAdmission
   ): Promise<Result<NoteEntity, NoteDomainError>> {
     try {
-      const result = await this.db
-        .update(notes)
-        .set({ deletedAt: null })
-        .where(
-          and(
-            eq(notes.id, id),
-            eq(notes.ownerId, ownerId),
-            isNotNull(notes.deletedAt)
+      return await this.writeAdmitted(ownerId, admission, async (db) => {
+        const [record] = await db
+          .update(notes)
+          .set({ deletedAt: null })
+          .where(
+            and(
+              eq(notes.id, id),
+              eq(notes.ownerId, ownerId),
+              isNotNull(notes.deletedAt)
+            )
           )
-        )
-        .returning();
-
-      if (!result[0]) {
-        return err(NoteErrors.noteNotFound(id));
-      }
-      return ok(mapToNoteEntity(result[0]));
+          .returning();
+        return record
+          ? ok(mapToNoteEntity(record))
+          : err(NoteErrors.noteNotFound(id));
+      });
     } catch (error) {
       this.logger.error(`Failed to restore note ${id}`, stackOf(error));
       return err(NoteErrors.persistenceError('restore', id));
     }
+  }
+
+  private async writeAdmitted(
+    ownerId: string,
+    { anonymousNoteCap }: NoteAdmission,
+    write: (db: NoteWriter) => Promise<Result<NoteEntity, NoteDomainError>>
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
+    if (anonymousNoteCap === undefined) {
+      return write(this.db);
+    }
+    return this.db.transaction(async (tx) => {
+      // Locking the owner row runs one owner's capped writes one at a time, so
+      // each count already includes the note the previous write committed.
+      await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, ownerId))
+        .for('no key update');
+      const [owned] = await tx
+        .select({ value: count() })
+        .from(notes)
+        .where(and(eq(notes.ownerId, ownerId), isNull(notes.deletedAt)));
+      if ((owned?.value ?? 0) >= anonymousNoteCap) {
+        return err(NoteErrors.anonymousNoteLimit(anonymousNoteCap));
+      }
+      return write(tx);
+    });
   }
 }

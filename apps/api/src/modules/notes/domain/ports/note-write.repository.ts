@@ -36,6 +36,12 @@ export type UpdateNoteContentData = UpdateNoteData & {
   readonly content: string;
 };
 
+/** The rule a write that adds an active note to its owner must enforce. */
+export interface NoteAdmission {
+  /** Refuse with `ANONYMOUS_NOTE_LIMIT` once the owner holds this many active notes, checked atomically with the write so concurrent writes cannot overshoot it. Absent: uncapped. */
+  readonly anonymousNoteCap?: number;
+}
+
 export interface RotateShareTokenData {
   readonly noteId: string;
   readonly ownerId: string;
@@ -47,10 +53,14 @@ export interface NoteWriteRepository {
   rotateShareToken(
     data: RotateShareTokenData
   ): Promise<Result<NoteEntity, NoteDomainError>>;
-  create(data: CreateNoteData): Promise<Result<NoteEntity, NoteDomainError>>;
+  create(
+    data: CreateNoteData,
+    admission: NoteAdmission
+  ): Promise<Result<NoteEntity, NoteDomainError>>;
   createWithYjsState(
     data: CreateNoteData,
-    yjsState: Buffer
+    yjsState: Buffer,
+    admission: NoteAdmission
   ): Promise<Result<NoteEntity, NoteDomainError>>;
   update(
     id: string,
@@ -68,7 +78,8 @@ export interface NoteWriteRepository {
   delete(id: string): Promise<Result<boolean, NoteDomainError>>;
   restore(
     id: string,
-    ownerId: string
+    ownerId: string,
+    admission: NoteAdmission
   ): Promise<Result<NoteEntity, NoteDomainError>>;
 }
 
