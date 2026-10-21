@@ -157,18 +157,21 @@ describe('UNTRUSTED_MARKDOWN_PROPS', () => {
   });
 
   describe('tables', () => {
-    it('renders without the fullscreen control Streamdown shows by default', () => {
-      const { unmount } = render(
-        <Streamdown mode="static">{TABLE}</Streamdown>
-      );
-      expect(screen.getByTitle('View fullscreen')).toBeInTheDocument();
-      unmount();
+    it.each(['View fullscreen', 'Copy table', 'Download table'])(
+      'renders without the "%s" control Streamdown shows by default',
+      (title) => {
+        const { unmount } = render(
+          <Streamdown mode="static">{TABLE}</Streamdown>
+        );
+        expect(screen.getByTitle(title)).toBeInTheDocument();
+        unmount();
 
-      renderUntrusted(TABLE);
+        renderUntrusted(TABLE);
 
-      expect(screen.getByRole('table')).toBeInTheDocument();
-      expect(screen.queryByTitle('View fullscreen')).toBeNull();
-    });
+        expect(screen.getByRole('table')).toBeInTheDocument();
+        expect(screen.queryByTitle(title)).toBeNull();
+      }
+    );
   });
 
   describe('diagrams', () => {

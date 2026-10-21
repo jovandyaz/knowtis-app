@@ -10,5 +10,5 @@ export const STREAMDOWN_OVERLAY_PROPS: Pick<
     enabled: true,
     renderModal: (props) => <LinkConfirmationDialog {...props} />,
   },
-  controls: { table: { fullscreen: false } },
+  controls: { table: false },
 };
