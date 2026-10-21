@@ -60,11 +60,10 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     const summaries =
       await this.noteReadRepository.findAccessibleSummariesByUser(
         branded,
+        MAX_SEARCH_HITS,
         query
       );
-    return summaries
-      .slice(0, MAX_SEARCH_HITS)
-      .map((note) => toNoteHit(note, userId));
+    return summaries.map((note) => toNoteHit(note, userId));
   }
 
   async listUnindexed(): Promise<NoteHit[]> {
@@ -115,10 +114,11 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     }
     const clampedLimit = Math.min(Math.max(limit, 1), MAX_SEARCH_HITS);
     const summaries =
-      await this.noteReadRepository.findAccessibleSummariesByUser(branded);
-    return summaries
-      .slice(0, clampedLimit)
-      .map((note) => toNoteHit(note, userId));
+      await this.noteReadRepository.findAccessibleSummariesByUser(
+        branded,
+        clampedLimit
+      );
+    return summaries.map((note) => toNoteHit(note, userId));
   }
 
   async overview(userId: string): Promise<NotesOverview> {
