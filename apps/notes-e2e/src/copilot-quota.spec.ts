@@ -17,8 +17,8 @@ import {
   routeApiJson,
   scriptAgent,
   test,
-  type ScriptedAgent,
 } from './fixtures/copilot.fixture';
+import type { ScriptedSocket } from './fixtures/scripted-socket.fixture';
 
 const QUOTA_ROUTE_RE = /\/ai\/quota(?:\?|$)/;
 const DASHBOARD_PATH = '/dashboard';
@@ -88,7 +88,7 @@ async function routeQuota(page: Page, initial: AiQuota) {
   };
 }
 
-async function sentTurnId(agent: ScriptedAgent): Promise<string> {
+async function sentTurnId(agent: ScriptedSocket): Promise<string> {
   return sentMessageSchema.parse(await agent.waitForSent('agent:message'))
     .turnId;
 }

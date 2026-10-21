@@ -97,7 +97,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository soft-delete', () => {
   });
 
   it('findAccessibleSummariesByUser excludes a soft-deleted note', async () => {
-    const rows = await repo.findAccessibleSummariesByUser(ownerId);
+    const rows = await repo.findAccessibleSummariesByUser(ownerId, 50);
     expect(rows.map((r) => r.id)).not.toContain(NOTE);
   });
 

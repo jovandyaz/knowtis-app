@@ -60,7 +60,7 @@ describe('CreateNoteHandler', () => {
   let handler: CreateNoteHandler;
   let mockRepository: NoteWriteRepository;
   let mockEventEmitter: EventEmitter2;
-  let noteLimit: { admit: ReturnType<typeof vi.fn> };
+  let noteLimit: { admissionFor: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     mockRepository = {
@@ -78,7 +78,7 @@ describe('CreateNoteHandler', () => {
       emit: vi.fn(),
     } as unknown as EventEmitter2;
 
-    noteLimit = { admit: vi.fn().mockResolvedValue(ok(undefined)) };
+    noteLimit = { admissionFor: vi.fn().mockResolvedValue({}) };
 
     handler = new CreateNoteHandler(
       mockRepository,
@@ -87,9 +87,44 @@ describe('CreateNoteHandler', () => {
     );
   });
 
-  it('refuses an owner the anonymous note limit does not admit, writing nothing', async () => {
+  it('hands the owner note cap to a write with content', async () => {
+    noteLimit.admissionFor.mockResolvedValue({ anonymousNoteCap: 5 });
+    vi.mocked(mockRepository.createWithYjsState).mockResolvedValue(
+      ok(CREATED_NOTE)
+    );
+
+    await handler.execute({
+      title: 'Valid Title',
+      content: '<p>Valid content</p>',
+      ownerId: 'user-123',
+    });
+
+    expect(noteLimit.admissionFor).toHaveBeenCalledWith(
+      expect.objectContaining({ value: 'user-123' })
+    );
+    expect(mockRepository.createWithYjsState).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Valid Title' }),
+      expect.any(Buffer),
+      { anonymousNoteCap: 5 }
+    );
+  });
+
+  it('hands the owner note cap to a write without content', async () => {
+    noteLimit.admissionFor.mockResolvedValue({ anonymousNoteCap: 5 });
+    vi.mocked(mockRepository.create).mockResolvedValue(ok(CREATED_NOTE));
+
+    await handler.execute({ title: 'Valid Title', ownerId: 'user-123' });
+
+    expect(mockRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Valid Title' }),
+      { anonymousNoteCap: 5 }
+    );
+  });
+
+  it('returns the anonymous note limit the write enforces without announcing a note', async () => {
     const limit = NoteErrors.anonymousNoteLimit(5);
-    noteLimit.admit.mockResolvedValue(err(limit));
+    noteLimit.admissionFor.mockResolvedValue({ anonymousNoteCap: 5 });
+    vi.mocked(mockRepository.createWithYjsState).mockResolvedValue(err(limit));
 
     const result = await handler.execute({
       title: 'Valid Title',
@@ -98,11 +133,6 @@ describe('CreateNoteHandler', () => {
     });
 
     expect(result._unsafeUnwrapErr()).toBe(limit);
-    expect(noteLimit.admit).toHaveBeenCalledWith(
-      expect.objectContaining({ value: 'user-123' })
-    );
-    expect(mockRepository.create).not.toHaveBeenCalled();
-    expect(mockRepository.createWithYjsState).not.toHaveBeenCalled();
     expect(mockEventEmitter.emit).not.toHaveBeenCalled();
   });
 
@@ -145,7 +175,8 @@ describe('CreateNoteHandler', () => {
         content: '<p>Valid content</p>',
         ownerId: expect.objectContaining({ value: input.ownerId }),
       },
-      expect.any(Buffer)
+      expect.any(Buffer),
+      {}
     );
     expect(mockRepository.create).not.toHaveBeenCalled();
 

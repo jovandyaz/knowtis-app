@@ -56,10 +56,7 @@ export class CreateNoteHandler {
       return err(contentResult.error);
     }
 
-    const admitted = await this.noteLimit.admit(ownerIdResult.value);
-    if (admitted.isErr()) {
-      return err(admitted.error);
-    }
+    const admission = await this.noteLimit.admissionFor(ownerIdResult.value);
 
     const data = {
       ...(input.id ? { id: input.id } : {}),
@@ -91,10 +88,11 @@ export class CreateNoteHandler {
 
       result = await this.noteRepository.createWithYjsState(
         { ...data, content },
-        yjsState
+        yjsState,
+        admission
       );
     } else {
-      result = await this.noteRepository.create(data);
+      result = await this.noteRepository.create(data, admission);
     }
 
     if (result.isOk()) {

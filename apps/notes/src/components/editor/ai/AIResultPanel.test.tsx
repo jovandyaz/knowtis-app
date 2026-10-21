@@ -1,15 +1,16 @@
 import { useState } from 'react';
 
+import { anchorRange } from '@/lib/anchored-range';
 import { useAIStore } from '@/stores/ai.store';
+import { createCollaborativeEditor } from '@/test/collaborative-editor';
 import { pressEscape } from '@/test/escape';
 import { createMockEditor } from '@/test/mock-editor';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { Editor } from '@tiptap/react';
+import type { Editor, Range } from '@tiptap/react';
 import type * as StreamdownModule from 'streamdown';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Dialog, DialogContent, DialogTitle } from '@knowtis/design-system';
-import { createBaseExtensions } from '@knowtis/editor';
 import { IMAGE_NODE_NAME } from '@knowtis/editor-schema';
 
 import { AIResultPanel } from './AIResultPanel';
@@ -157,22 +158,16 @@ describe('AIResultPanel inserting a finished result', () => {
 
   function finishOver(
     content: string,
-    selectionRange: { from: number; to: number },
+    selection: Range,
     streamedText: string
   ): Editor {
-    const live = new Editor({
-      element: document.createElement('div'),
-      extensions: createBaseExtensions({ disableHistory: true }),
-      content,
-    });
-    vi.spyOn(live.view, 'coordsAtPos').mockReturnValue({
-      top: 0,
-      bottom: 0,
-      left: 0,
-      right: 0,
-    });
+    const { editor: live } = createCollaborativeEditor(content);
     editor = live;
-    useAIStore.setState({ status: 'done', streamedText, selectionRange });
+    useAIStore.setState({
+      status: 'done',
+      streamedText,
+      selectionRange: anchorRange(live, selection),
+    });
     render(<AIResultPanel editor={live} />);
     return live;
   }

@@ -1,11 +1,8 @@
 import { expect, type Page } from '@playwright/test';
 
 import { test } from './fixtures/conversations.fixture';
-import {
-  openCopilotDock,
-  scriptAgent,
-  type ScriptedAgent,
-} from './fixtures/copilot.fixture';
+import { openCopilotDock, scriptAgent } from './fixtures/copilot.fixture';
+import type { ScriptedSocket } from './fixtures/scripted-socket.fixture';
 
 const RECENT_RE = /^(recent conversations|conversaciones recientes)$/i;
 const RENAME_RE = /^(rename|cambiar nombre)$/i;
@@ -42,7 +39,7 @@ function openLabel(title: string): RegExp {
   );
 }
 
-function messagesSent(agent: ScriptedAgent): { conversationId?: string }[] {
+function messagesSent(agent: ScriptedSocket): { conversationId?: string }[] {
   return agent.sent
     .filter((item) => item.event === 'agent:message')
     .map((item) => item.payload as { conversationId?: string });

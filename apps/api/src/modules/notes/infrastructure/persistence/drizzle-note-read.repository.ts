@@ -225,6 +225,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
 
   async findAccessibleSummariesByUser(
     userId: UserId,
+    limit: number,
     search?: string
   ): Promise<NoteSummary[]> {
     return this.db
@@ -232,7 +233,8 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       .from(notes)
       .leftJoin(notePermissions, this.permissionJoinCondition(userId))
       .where(this.accessibleWhere(userId, search ? { search } : undefined))
-      .orderBy(desc(notes.updatedAt));
+      .orderBy(desc(notes.updatedAt), desc(notes.id))
+      .limit(limit);
   }
 
   async findAccessibleNotesByLexicalRank(

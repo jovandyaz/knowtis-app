@@ -148,6 +148,7 @@ describe('KeywordRetrievalAdapter', () => {
 
       expect(repo.findAccessibleSummariesByUser).toHaveBeenCalledWith(
         expect.objectContaining({ value: USER }),
+        20,
         'method'
       );
       expect(repo.findAccessibleByUser).not.toHaveBeenCalled();
@@ -214,17 +215,17 @@ describe('KeywordRetrievalAdapter', () => {
       expect(hits[0]).toMatchObject({ isOwner: true, isPubliclyShared: false });
     });
 
-    it('caps results to MAX_SEARCH_HITS (20)', async () => {
-      const repo = makeRepo({
-        summaries: Array.from({ length: 25 }, (_, i) =>
-          summary(`id-${i}`, `Note ${i}`)
-        ),
-      });
+    it('asks the repository for at most MAX_SEARCH_HITS (20) rows instead of trimming them after the read', async () => {
+      const repo = makeRepo();
       const { adapter } = makeAdapter(repo);
 
-      const hits = await adapter.search(EXECUTION, 'note');
+      await adapter.search(EXECUTION, 'note');
 
-      expect(hits).toHaveLength(20);
+      expect(repo.findAccessibleSummariesByUser).toHaveBeenCalledWith(
+        expect.objectContaining({ value: USER }),
+        20,
+        'note'
+      );
     });
 
     it('returns empty without hitting the repo when userId cannot be branded', async () => {
@@ -937,46 +938,27 @@ describe('KeywordRetrievalAdapter', () => {
 
       const hits = await adapter.listRecent(USER, 3);
 
-      expect(repo.findAccessibleSummariesByUser).toHaveBeenCalledWith(
-        expect.objectContaining({ value: USER })
-      );
       expect(hits.map((h) => h.id)).toEqual(['new', 'mid', 'old']);
     });
 
-    it('respects the limit parameter', async () => {
-      const repo = makeRepo({
-        summaries: Array.from({ length: 10 }, (_, i) =>
-          summary(`id-${i}`, `Note ${i}`)
-        ),
-      });
-      const { adapter } = makeAdapter(repo);
+    it.each([
+      ['passes a limit within range through', 3, 3],
+      ['clamps a limit above MAX_SEARCH_HITS (20)', 99, 20],
+      ['clamps a limit below 1', 0, 1],
+    ])(
+      '%s to the repository, with no search',
+      async (_label, requested, applied) => {
+        const repo = makeRepo();
+        const { adapter } = makeAdapter(repo);
 
-      const hits = await adapter.listRecent(USER, 3);
+        await adapter.listRecent(USER, requested);
 
-      expect(hits).toHaveLength(3);
-    });
-
-    it('clamps limit to MAX_SEARCH_HITS (20)', async () => {
-      const repo = makeRepo({
-        summaries: Array.from({ length: 25 }, (_, i) =>
-          summary(`id-${i}`, `Note ${i}`)
-        ),
-      });
-      const { adapter } = makeAdapter(repo);
-
-      const hits = await adapter.listRecent(USER, 99);
-
-      expect(hits).toHaveLength(20);
-    });
-
-    it('clamps limit minimum to 1', async () => {
-      const repo = makeRepo({ summaries: [summary('a', 'Only Note')] });
-      const { adapter } = makeAdapter(repo);
-
-      const hits = await adapter.listRecent(USER, 0);
-
-      expect(hits).toHaveLength(1);
-    });
+        expect(repo.findAccessibleSummariesByUser).toHaveBeenCalledWith(
+          expect.objectContaining({ value: USER }),
+          applied
+        );
+      }
+    );
 
     it('returns empty without hitting the repo when userId cannot be branded', async () => {
       const repo = makeRepo();

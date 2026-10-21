@@ -10,6 +10,7 @@ import { DrizzleNoteWriteRepository } from './drizzle-note-write.repository';
 const NOTE_ID = '4a7c1f1e-6a0b-4d52-9f5e-2f8e1c3b9d10';
 const OWNER_ID = 'owner-1';
 const SECRET_CONTENT = 'sentinel-private-note-content';
+const OWNED_NOTE_CAP = 5;
 const DIAGNOSTICS_HEADER =
   'DrizzleQueryError (failureCategory=unclassified, sqlState=40P01)';
 
@@ -37,11 +38,39 @@ describe('DrizzleNoteWriteRepository when the database rejects a write', () => {
     [
       'create',
       (repo: DrizzleNoteWriteRepository) =>
-        repo.create({
-          title: SECRET_CONTENT,
-          content: SECRET_CONTENT,
-          ownerId: UserId.fromTrusted(OWNER_ID),
-        }),
+        repo.create(
+          {
+            title: SECRET_CONTENT,
+            content: SECRET_CONTENT,
+            ownerId: UserId.fromTrusted(OWNER_ID),
+          },
+          {}
+        ),
+    ],
+    [
+      'create under an owned-note cap',
+      (repo: DrizzleNoteWriteRepository) =>
+        repo.create(
+          {
+            title: SECRET_CONTENT,
+            content: SECRET_CONTENT,
+            ownerId: UserId.fromTrusted(OWNER_ID),
+          },
+          { anonymousNoteCap: OWNED_NOTE_CAP }
+        ),
+    ],
+    [
+      'createWithYjsState under an owned-note cap',
+      (repo: DrizzleNoteWriteRepository) =>
+        repo.createWithYjsState(
+          {
+            title: SECRET_CONTENT,
+            content: SECRET_CONTENT,
+            ownerId: UserId.fromTrusted(OWNER_ID),
+          },
+          Buffer.from(SECRET_CONTENT),
+          { anonymousNoteCap: OWNED_NOTE_CAP }
+        ),
     ],
     [
       'update',
@@ -65,7 +94,12 @@ describe('DrizzleNoteWriteRepository when the database rejects a write', () => {
     ['delete', (repo: DrizzleNoteWriteRepository) => repo.delete(NOTE_ID)],
     [
       'restore',
-      (repo: DrizzleNoteWriteRepository) => repo.restore(NOTE_ID, OWNER_ID),
+      (repo: DrizzleNoteWriteRepository) => repo.restore(NOTE_ID, OWNER_ID, {}),
+    ],
+    [
+      'restore under an owned-note cap',
+      (repo: DrizzleNoteWriteRepository) =>
+        repo.restore(NOTE_ID, OWNER_ID, { anonymousNoteCap: OWNED_NOTE_CAP }),
     ],
   ])(
     'logs a rejected %s by its diagnostics, never by the note values the query carried',

@@ -26,5 +26,7 @@ export function createMockEditor(): Editor {
     },
     state: { selection: { to: 0 } },
     commands: { focus: vi.fn() },
+    on: vi.fn(),
+    off: vi.fn(),
   } as unknown as Editor;
 }

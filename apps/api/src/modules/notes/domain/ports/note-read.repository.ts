@@ -54,8 +54,10 @@ export interface NoteReadRepository {
     page: NotePageRequest,
     filters?: NoteListFilters
   ): Promise<AccessibleNotePage>;
+  /** The `limit` most recently updated notes `userId` can read, optionally only those whose title or content contains `search`. */
   findAccessibleSummariesByUser(
     userId: UserId,
+    limit: number,
     search?: string
   ): Promise<NoteSummary[]>;
   findAccessibleNotesByLexicalRank(

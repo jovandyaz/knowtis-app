@@ -70,9 +70,16 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 vi.mock('@/stores/ai.store', () => {
+  const idle = {
+    status: 'idle',
+    selectionRange: null,
+    reset: () => undefined,
+    cancelStream: () => undefined,
+  };
+  const state = () => ({ ...idle, aiEnabled });
   const useAIStore = (selector?: (s: object) => unknown) =>
-    selector ? selector({ aiEnabled }) : aiEnabled;
-  useAIStore.getState = () => ({ aiEnabled, status: 'idle' });
+    selector ? selector(state()) : state();
+  useAIStore.getState = state;
   return { useAIStore };
 });
 vi.mock('./ai/aiClientProvider', () => ({

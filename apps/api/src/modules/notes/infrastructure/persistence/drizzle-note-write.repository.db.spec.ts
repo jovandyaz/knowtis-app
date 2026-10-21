@@ -85,7 +85,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteWriteRepository soft-delete', () => {
 
   it('restore clears deleted_at for the owner', async () => {
     await repo.delete(NOTE);
-    const result = await repo.restore(NOTE, OWNER);
+    const result = await repo.restore(NOTE, OWNER, {});
     expect(result.isOk()).toBe(true);
 
     const rows = await db
@@ -98,7 +98,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteWriteRepository soft-delete', () => {
 
   it('restore by a non-owner returns not-found and leaves the note deleted', async () => {
     await repo.delete(NOTE);
-    const result = await repo.restore(NOTE, OTHER);
+    const result = await repo.restore(NOTE, OTHER, {});
     expect(result.isErr()).toBe(true);
 
     const rows = await db
@@ -109,7 +109,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteWriteRepository soft-delete', () => {
   });
 
   it('restore of a note that is not deleted returns not-found', async () => {
-    const result = await repo.restore(NOTE, OWNER);
+    const result = await repo.restore(NOTE, OWNER, {});
     expect(result.isErr()).toBe(true);
   });
 });

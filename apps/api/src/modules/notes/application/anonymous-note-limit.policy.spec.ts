@@ -4,71 +4,42 @@ import { describe, expect, it, vi } from 'vitest';
 import { ANONYMOUS_LIMITS } from '@knowtis/shared-types';
 
 import type { UsersService } from '../../users/users.service';
-import { NoteErrorCodes } from '../domain/errors/note.errors';
-import type { NoteReadRepository } from '../domain/ports/note-read.repository';
 import { AnonymousNoteLimitPolicy } from './anonymous-note-limit.policy';
 
 const OWNER = UserId.fromTrusted('5d0c2a9e-41b7-4f3e-9a6d-2c8e1f7b3a40');
 
-function policyFor(
-  owner: { isAnonymous: boolean } | null,
-  owned: number
-): {
+function policyFor(owner: { isAnonymous: boolean } | null): {
   policy: AnonymousNoteLimitPolicy;
-  countAccessibleByUser: ReturnType<typeof vi.fn>;
+  findById: ReturnType<typeof vi.fn>;
 } {
-  const users = {
-    findById: vi.fn().mockResolvedValue(owner),
-  } as unknown as UsersService;
-  const countAccessibleByUser = vi
-    .fn()
-    .mockResolvedValue({ total: owned + 3, owned });
-  const notes = { countAccessibleByUser } as unknown as NoteReadRepository;
+  const findById = vi.fn().mockResolvedValue(owner);
   return {
-    policy: new AnonymousNoteLimitPolicy(users, notes),
-    countAccessibleByUser,
+    policy: new AnonymousNoteLimitPolicy({
+      findById,
+    } as unknown as UsersService),
+    findById,
   };
 }
 
 describe('AnonymousNoteLimitPolicy', () => {
-  it('admits an anonymous owner below the limit', async () => {
-    const { policy } = policyFor(
-      { isAnonymous: true },
-      ANONYMOUS_LIMITS.maxNotes - 1
-    );
+  it('caps an anonymous owner at the anonymous note limit, read from their account', async () => {
+    const { policy, findById } = policyFor({ isAnonymous: true });
 
-    expect((await policy.admit(OWNER)).isOk()).toBe(true);
-  });
-
-  it('refuses an anonymous owner who already holds the limit, counting only the notes they own', async () => {
-    const { policy, countAccessibleByUser } = policyFor(
-      { isAnonymous: true },
-      ANONYMOUS_LIMITS.maxNotes
-    );
-
-    const result = await policy.admit(OWNER);
-
-    expect(result._unsafeUnwrapErr()).toMatchObject({
-      code: NoteErrorCodes.ANONYMOUS_NOTE_LIMIT,
-      message: expect.stringContaining(String(ANONYMOUS_LIMITS.maxNotes)),
+    expect(await policy.admissionFor(OWNER)).toEqual({
+      anonymousNoteCap: ANONYMOUS_LIMITS.maxNotes,
     });
-    expect(countAccessibleByUser).toHaveBeenCalledWith(OWNER);
+    expect(findById).toHaveBeenCalledWith(OWNER.value);
   });
 
-  it('admits a registered owner past the anonymous limit without counting', async () => {
-    const { policy, countAccessibleByUser } = policyFor(
-      { isAnonymous: false },
-      ANONYMOUS_LIMITS.maxNotes + 10
-    );
+  it('leaves a registered owner uncapped', async () => {
+    const { policy } = policyFor({ isAnonymous: false });
 
-    expect((await policy.admit(OWNER)).isOk()).toBe(true);
-    expect(countAccessibleByUser).not.toHaveBeenCalled();
+    expect(await policy.admissionFor(OWNER)).toEqual({});
   });
 
   it('leaves an unknown owner to the write that follows', async () => {
-    const { policy, countAccessibleByUser } = policyFor(null, 0);
+    const { policy } = policyFor(null);
 
-    expect((await policy.admit(OWNER)).isOk()).toBe(true);
-    expect(countAccessibleByUser).not.toHaveBeenCalled();
+    expect(await policy.admissionFor(OWNER)).toEqual({});
   });
 });

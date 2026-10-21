@@ -1109,25 +1109,25 @@ Holds each user's account-default copilot model and intent. Created in migration
 
 ### Editor Components
 
-| Component            | Behavior                                                                                |
-| -------------------- | --------------------------------------------------------------------------------------- |
-| `AIMenuPopover`      | AI action menu (dialog) on selection/cursor; backed by `ai-menu.store`.                 |
-| `AIMenuContent`      | Action list rendered inside the menu, with sub-menus for translate and tone.            |
-| `SlashCommandMenu`   | Triggered by `/`. Shows AI commands + formatting commands.                              |
-| `AIResultPanel`      | Tippy panel below selection. Replace, insert below, or discard result.                  |
-| `AIStreamingPreview` | Streams text as chunks arrive. Shows retry button on error.                             |
-| `GhostText`          | Tiptap extension. Inline suggestion after inactivity. Tab to accept, Escape to dismiss. |
-| `AIBlockNode`        | Tiptap atom node. Inline topic-based content generator with streaming preview.          |
+| Component            | Behavior                                                                                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `AIMenuPopover`      | AI action menu (dialog) on selection/cursor; backed by `ai-menu.store`.                                                           |
+| `AIMenuContent`      | Action list rendered inside the menu, with sub-menus for translate and tone.                                                      |
+| `SlashCommandMenu`   | Triggered by `/`. Shows AI commands + formatting commands.                                                                        |
+| `AIResultPanel`      | Tippy panel below selection. Replace, insert below, or discard result. Cancels the stream when it unmounts or its editor changes. |
+| `AIStreamingPreview` | Streams text as chunks arrive. Shows retry button on error.                                                                       |
+| `GhostText`          | Tiptap extension. Inline suggestion after inactivity. Tab to accept, Escape to dismiss.                                           |
+| `AIBlockNode`        | Tiptap atom node. Inline topic-based content generator with streaming preview.                                                    |
 
 ### Zustand Store (`useAIStore`)
 
-| State            | Type                                                      | Description                     |
-| ---------------- | --------------------------------------------------------- | ------------------------------- |
-| `status`         | `'idle' \| 'streaming' \| 'done' \| 'error' \| 'timeout'` | Current AI stream state         |
-| `streamedText`   | `string`                                                  | Accumulated response            |
-| `error`          | `AIErrorPayload \| null`                                  | Error from server               |
-| `selectionRange` | `{ from, to } \| null`                                    | Editor selection at action time |
-| `lastPayload`    | `AICompletePayload \| null`                               | Used for retry                  |
+| State            | Type                                                      | Description                                                                                                                                              |
+| ---------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`         | `'idle' \| 'streaming' \| 'done' \| 'error' \| 'timeout'` | Current AI stream state                                                                                                                                  |
+| `streamedText`   | `string`                                                  | Accumulated response                                                                                                                                     |
+| `error`          | `AIErrorPayload \| null`                                  | Error from server                                                                                                                                        |
+| `selectionRange` | `AnchoredRange \| null`                                   | Selection at action time, anchored to the Yjs doc (`lib/anchored-range.ts`) so collaborator and local edits move it; resolved when the result is applied |
+| `lastPayload`    | `AICompletePayload \| null`                               | Used for retry                                                                                                                                           |
 
 Key actions: `startStream(payload)`, `cancelStream()`, `retry()`, `reset()`, `setSelectionRange(range)`.
 

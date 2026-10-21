@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { resolveRange, type AnchoredRange } from '@/lib/anchored-range';
 import { useAIStore } from '@/stores/ai.store';
 import type { Fragment, Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Selection } from '@tiptap/pm/state';
-import type { Editor } from '@tiptap/react';
+import type { Editor, Range } from '@tiptap/react';
 import tippy from 'tippy.js';
 import type { Instance as TippyInstance } from 'tippy.js';
 
@@ -27,19 +28,21 @@ function replacementContent(editor: Editor, markdown: string): Fragment {
   return onlyBlock?.type.name === PARAGRAPH_NODE ? onlyBlock.content : blocks;
 }
 
+function targetRange(editor: Editor, anchored: AnchoredRange | null): Range {
+  const resolved = anchored ? resolveRange(editor, anchored) : null;
+  if (resolved) {
+    return resolved;
+  }
+  const { to } = editor.state.selection;
+  return { from: to, to };
+}
+
 function positionAfterBlockAt(selection: Selection): number {
   const { $to } = selection;
   return $to.parent.isTextblock ? $to.after() : selection.to;
 }
 
-function positionBelow(
-  doc: ProseMirrorNode,
-  rangeFrom: number,
-  rangeTo: number
-): number {
-  const clamp = (pos: number) => Math.min(Math.max(pos, 0), doc.content.size);
-  const from = clamp(rangeFrom);
-  const to = clamp(rangeTo);
+function positionBelow(doc: ProseMirrorNode, from: number, to: number): number {
   const $to = doc.resolve(to);
   const block = $to.parent;
   if (!block.isTextblock || block.content.size === 0) {
@@ -53,7 +56,7 @@ function positionBelow(
 }
 
 export function AIResultPanel({ editor }: AIResultPanelProps) {
-  const { status, reset, selectionRange } = useAIStore();
+  const { status, reset, cancelStream, selectionRange } = useAIStore();
   const tippyRef = useRef<TippyInstance | null>(null);
   const [portalTarget] = useState(() => document.createElement('div'));
 
@@ -67,19 +70,13 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
       if (editor.isDestroyed) {
         return;
       }
-      const range = selectionRange;
-      const content = replacementContent(editor, text);
-      if (range) {
-        editor
-          .chain()
-          .focus()
-          .setTextSelection(range)
-          .deleteSelection()
-          .insertContent(content)
-          .run();
-      } else {
-        editor.chain().focus().insertContent(content).run();
-      }
+      editor
+        .chain()
+        .focus()
+        .setTextSelection(targetRange(editor, selectionRange))
+        .deleteSelection()
+        .insertContent(replacementContent(editor, text))
+        .run();
       reset();
     },
     [editor, reset, selectionRange]
@@ -90,7 +87,7 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
       if (editor.isDestroyed) {
         return;
       }
-      const { from, to } = selectionRange ?? editor.state.selection;
+      const { from, to } = targetRange(editor, selectionRange);
       editor
         .chain()
         .focus()
@@ -109,14 +106,36 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
     editor.commands.focus();
   }, [reset, editor]);
 
+  // The AI store is global: without this, a preview anchored in this editor's
+  // note would follow the user into the next editor and apply there.
+  useEffect(() => {
+    return () => {
+      cancelStream();
+    };
+  }, [editor, cancelStream]);
+
   useEffect(() => {
     let stopRecordingPress = () => undefined;
+    let stopFollowingEdits = () => undefined;
     if (isActive) {
-      const proseMirrorEl = editor.view.dom;
-      const editorRect = proseMirrorEl.getBoundingClientRect();
-
-      const pos = selectionRange?.to ?? editor.state.selection.to;
-      const coords = editor.view.coordsAtPos(pos);
+      const anchorRect = () => {
+        const editorRect = editor.view.dom.getBoundingClientRect();
+        const { bottom } = editor.view.coordsAtPos(
+          targetRange(editor, selectionRange).to
+        );
+        return {
+          width: editorRect.width,
+          height: 0,
+          top: bottom,
+          bottom,
+          left: editorRect.left,
+          right: editorRect.right,
+          x: editorRect.left,
+          y: bottom,
+          toJSON: () => ({}),
+        };
+      };
+      let lastAnchorRect = anchorRect();
 
       tippyRef.current?.destroy();
 
@@ -132,17 +151,12 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
       };
 
       const instance = tippy(document.body, {
-        getReferenceClientRect: () => ({
-          width: editorRect.width,
-          height: 0,
-          top: coords.bottom,
-          bottom: coords.bottom,
-          left: editorRect.left,
-          right: editorRect.right,
-          x: editorRect.left,
-          y: coords.bottom,
-          toJSON: () => ({}),
-        }),
+        getReferenceClientRect: () => {
+          if (!editor.isDestroyed) {
+            lastAnchorRect = anchorRect();
+          }
+          return lastAnchorRect;
+        },
         appendTo: () => document.body,
         content: portalTarget,
         showOnCreate: true,
@@ -161,12 +175,21 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
       });
 
       tippyRef.current = instance;
+
+      const followEdits = () => {
+        void instance.popperInstance?.update();
+      };
+      editor.on('update', followEdits);
+      stopFollowingEdits = () => {
+        editor.off('update', followEdits);
+      };
     } else {
       tippyRef.current?.destroy();
       tippyRef.current = null;
     }
 
     return () => {
+      stopFollowingEdits();
       stopRecordingPress();
       tippyRef.current?.destroy();
       tippyRef.current = null;

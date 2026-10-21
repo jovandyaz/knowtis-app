@@ -2,21 +2,18 @@ import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
 import { NoteErrors } from '../../domain/errors/note.errors';
+import type { NoteAdmission } from '../../domain/ports/note-write.repository';
 import type { AnonymousNoteLimitPolicy } from '../anonymous-note-limit.policy';
 import { RestoreNoteHandler } from './restore-note.handler';
 
-function noteLimitOf(
-  admitted: ReturnType<typeof NoteErrors.anonymousNoteLimit> | null = null
-): AnonymousNoteLimitPolicy {
+function noteLimitOf(admission: NoteAdmission = {}): AnonymousNoteLimitPolicy {
   return {
-    admit: vi
-      .fn()
-      .mockResolvedValue(admitted === null ? ok(undefined) : err(admitted)),
+    admissionFor: vi.fn().mockResolvedValue(admission),
   } as unknown as AnonymousNoteLimitPolicy;
 }
 
 describe('RestoreNoteHandler', () => {
-  it('delegates to the repository with the note id and user id', async () => {
+  it('delegates to the repository with the note id, user id and the owner admission', async () => {
     const restored = { id: 'n1', ownerId: 'owner' };
     const noteRepo = { restore: vi.fn().mockResolvedValue(ok(restored)) };
 
@@ -24,7 +21,7 @@ describe('RestoreNoteHandler', () => {
     const result = await handler.execute({ noteId: 'n1', userId: 'owner' });
 
     expect(result.isOk()).toBe(true);
-    expect(noteRepo.restore).toHaveBeenCalledWith('n1', 'owner');
+    expect(noteRepo.restore).toHaveBeenCalledWith('n1', 'owner', {});
   });
 
   it('propagates a not-found error from the repository', async () => {
@@ -38,18 +35,20 @@ describe('RestoreNoteHandler', () => {
     expect(result.isErr()).toBe(true);
   });
 
-  it('refuses a restore the anonymous note limit does not admit, restoring nothing', async () => {
+  it('hands the owner note cap to the restore and returns the refusal it enforces', async () => {
     const limit = NoteErrors.anonymousNoteLimit(5);
-    const noteLimit = noteLimitOf(limit);
-    const noteRepo = { restore: vi.fn() };
+    const noteLimit = noteLimitOf({ anonymousNoteCap: 5 });
+    const noteRepo = { restore: vi.fn().mockResolvedValue(err(limit)) };
 
     const handler = new RestoreNoteHandler(noteRepo as never, noteLimit);
     const result = await handler.execute({ noteId: 'n1', userId: 'owner' });
 
     expect(result._unsafeUnwrapErr()).toBe(limit);
-    expect(noteLimit.admit).toHaveBeenCalledWith(
+    expect(noteLimit.admissionFor).toHaveBeenCalledWith(
       expect.objectContaining({ value: 'owner' })
     );
-    expect(noteRepo.restore).not.toHaveBeenCalled();
+    expect(noteRepo.restore).toHaveBeenCalledWith('n1', 'owner', {
+      anonymousNoteCap: 5,
+    });
   });
 });
