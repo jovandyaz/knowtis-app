@@ -1,6 +1,6 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { Logger } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { eq, inArray } from 'drizzle-orm';
 import postgres from 'postgres';
@@ -44,7 +44,6 @@ const LOCK_WAIT_TIMEOUT_MS = 3000;
 describe.runIf(DB_AVAILABLE)(
   'DrizzleAnonymousDataMigrationRepository racing a capped note write',
   () => {
-    const databaseUrl = process.env['DATABASE_URL'] ?? '';
     let moduleRef: TestingModule;
     let db: Database;
     let holder: postgres.Sql;
@@ -121,6 +120,9 @@ describe.runIf(DB_AVAILABLE)(
         ],
       }).compile();
       db = moduleRef.get<Database>(DATABASE_CONNECTION);
+      const databaseUrl = moduleRef
+        .get(ConfigService)
+        .getOrThrow<string>('DATABASE_URL');
       holder = postgres(databaseUrl, { max: 1 });
       observer = postgres(databaseUrl, { max: 1 });
       migration = new DrizzleAnonymousDataMigrationRepository(db);
