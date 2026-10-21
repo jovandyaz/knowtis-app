@@ -41,6 +41,12 @@ interface TextPoint {
   offset: number;
 }
 
+/** The slice of the Tiptap editor that @tiptap/core attaches to its root element. */
+interface EditorProbe {
+  state: { selection: { anchor: number; head: number } };
+  view: { posAtDOM(node: Node, offset: number): number };
+}
+
 const test = sharingTest.extend<{ scriptedSockets: true }>({
   scriptedSockets: [
     // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructured fixture dependency list.
@@ -113,37 +119,57 @@ async function openNote(
 }
 
 /** Selects from `anchor` to `head` through the DOM, without the pointer press
- * that would dismiss an open AI preview. Each point's text must sit in a single
- * text node, and a remote collaborator's selection highlight splits the words
- * it covers into nodes of their own. */
+ * that would dismiss an open AI preview, until the editor state holds it: a
+ * remote caret re-rendering first makes ProseMirror write its own selection back.
+ * Each point's text must sit in one text node; a remote selection highlight
+ * splits the words it covers into nodes of their own. */
 async function select(
   editor: Locator,
   anchor: TextPoint,
   head: TextPoint = anchor
 ) {
   await editor.focus();
-  await editor.evaluate(
-    (root, points) => {
-      const locate = ({ text, offset }: TextPoint) => {
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-          const index = node.parentElement?.closest(points.widget)
-            ? -1
-            : (node.textContent ?? '').indexOf(text);
-          if (index >= 0) {
-            return { node, offset: index + offset };
+  const applied = () =>
+    editor.evaluate(
+      (root, points) => {
+        const locate = ({ text, offset }: TextPoint) => {
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const index = node.parentElement?.closest(points.widget)
+              ? -1
+              : (node.textContent ?? '').indexOf(text);
+            if (index >= 0) {
+              return { node, offset: index + offset };
+            }
           }
+          throw new Error(`"${text}" is not in one text node of the editor`);
+        };
+        const exposesEditor = (
+          element: Element
+        ): element is Element & { editor: EditorProbe } =>
+          'editor' in element &&
+          typeof element.editor === 'object' &&
+          element.editor !== null;
+        if (!exposesEditor(root)) {
+          throw new Error('The editor root does not expose its Tiptap editor');
         }
-        throw new Error(`"${text}" is not in one text node of the editor`);
-      };
-      const from = locate(points.anchor);
-      const to = locate(points.head);
-      document
-        .getSelection()
-        ?.setBaseAndExtent(from.node, from.offset, to.node, to.offset);
-    },
-    { anchor, head, widget: WIDGET_SELECTOR }
-  );
+        const from = locate(points.anchor);
+        const to = locate(points.head);
+        const { state, view } = root.editor;
+        if (
+          state.selection.anchor === view.posAtDOM(from.node, from.offset) &&
+          state.selection.head === view.posAtDOM(to.node, to.offset)
+        ) {
+          return true;
+        }
+        document
+          .getSelection()
+          ?.setBaseAndExtent(from.node, from.offset, to.node, to.offset);
+        return false;
+      },
+      { anchor, head, widget: WIDGET_SELECTOR }
+    );
+  await expect.poll(applied).toBe(true);
 }
 
 async function improveSelection(page: Page) {
