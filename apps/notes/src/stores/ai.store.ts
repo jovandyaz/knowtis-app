@@ -1,4 +1,5 @@
 import { captureProductEvent } from '@/lib/analytics/product-events';
+import type { AnchoredRange } from '@/lib/anchored-range';
 import { create } from 'zustand';
 
 import {
@@ -12,11 +13,6 @@ import { createChunkBuffer } from './chunk-buffer';
 
 type AIStatus = 'idle' | 'streaming' | 'done' | 'error' | 'timeout';
 
-interface SelectionRange {
-  from: number;
-  to: number;
-}
-
 export const STREAM_INACTIVITY_MS = 45000;
 const CHUNK_FLUSH_MS = 50;
 
@@ -25,11 +21,11 @@ interface AIState {
   streamedText: string;
   error: AIErrorPayload | null;
   lastPayload: AICompletePayload | null;
-  selectionRange: SelectionRange | null;
+  selectionRange: AnchoredRange | null;
   aiEnabled: boolean;
   _streamHandle: AIStreamHandle | null;
   startStream: (payload: AICompletePayload) => void;
-  setSelectionRange: (range: SelectionRange | null) => void;
+  setSelectionRange: (range: AnchoredRange | null) => void;
   setAIEnabled: (enabled: boolean) => void;
   retry: () => void;
   cancelStream: () => void;

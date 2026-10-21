@@ -109,6 +109,7 @@
     "@tiptap/react": "^3.31.0",
     "@tiptap/starter-kit": "^3.31.0",
     "@tiptap/suggestion": "^3.31.0",
+    "@tiptap/y-tiptap": "^3.0.1",
     "ai": "^7.0.85",
     "bcryptjs": "^3.0.3",
     "cache-manager": "^7.2.8",

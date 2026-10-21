@@ -1,3 +1,4 @@
+import { anchorRange } from '@/lib/anchored-range';
 import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
@@ -269,7 +270,7 @@ function streamAIAction({
   if (context === AI_MENU_CONTEXT.SELECTION) {
     const { from, to } = editor.state.selection;
     const selection = editor.state.doc.textBetween(from, to, ' ');
-    store.setSelectionRange({ from, to });
+    store.setSelectionRange(anchorRange(editor, { from, to }));
     store.startStream({ action: config.action, content, selection, ...target });
     return;
   }
@@ -280,7 +281,7 @@ function streamAIAction({
   }
 
   const pos = editor.state.selection.to;
-  store.setSelectionRange({ from: pos, to: pos });
+  store.setSelectionRange(anchorRange(editor, { from: pos, to: pos }));
   store.startStream({ action: config.action, content, ...target });
 }
 
