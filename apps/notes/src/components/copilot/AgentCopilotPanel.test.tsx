@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { useAgentStore } from '@/stores/agent.store';
+import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
@@ -25,6 +26,7 @@ import {
   AGENT_TURN_ERROR_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  ANONYMOUS_NOTE_LIMIT_CODE,
   MESSAGE_KIND,
   type AgentByokKeyFailedError,
   type ConversationTranscript,
@@ -381,6 +383,42 @@ describe('AgentCopilotPanel', () => {
     expect(
       screen.queryByRole('button', { name: 'ai.copilot.byok.reviewKey' })
     ).not.toBeInTheDocument();
+  });
+
+  describe('a guest refused a note past the guest limit', () => {
+    beforeEach(() => {
+      useAnonymousLimitStore.setState({ showModal: false });
+      vi.mocked(captureProductEvent).mockClear();
+    });
+
+    it('offers the free account that lifts the limit', async () => {
+      const user = userEvent.setup();
+      render(<AgentCopilotPanel />, { wrapper: anonymousWrapper });
+
+      failWith(ANONYMOUS_NOTE_LIMIT_CODE);
+      await user.click(
+        screen.getByRole('button', { name: 'ai.copilot.quota.registerCta' })
+      );
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'ai.errors.anonymousNoteLimit'
+      );
+      expect(useAnonymousLimitStore.getState().showModal).toBe(true);
+      expect(vi.mocked(captureProductEvent).mock.calls).toEqual([
+        ['ai upgrade cta clicked', { from_tier: 'anonymous', cta: 'register' }],
+      ]);
+    });
+
+    it('offers no account for any other refusal', () => {
+      render(<AgentCopilotPanel />, { wrapper: anonymousWrapper });
+
+      failWith(AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS);
+
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'ai.copilot.quota.registerCta' })
+      ).not.toBeInTheDocument();
+    });
   });
 
   it('does not offer a code to a visitor with no address', () => {

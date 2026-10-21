@@ -19,6 +19,7 @@ import {
   selectContinuableAnswer,
   useAgentStore,
 } from '@/stores/agent.store';
+import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
@@ -31,6 +32,7 @@ import {
   AGENT_EMAIL_NOT_VERIFIED_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  ANONYMOUS_NOTE_LIMIT_CODE,
   BYOK_KEY_FAILURE_KIND,
   isContinuableStop,
 } from '@knowtis/shared-types';
@@ -269,11 +271,31 @@ export function AgentCopilotPanel() {
           },
         }
       : {};
+  const createAccount =
+    error?.code === ANONYMOUS_NOTE_LIMIT_CODE
+      ? {
+          action: {
+            label: t('ai.copilot.quota.registerCta'),
+            onClick: () => {
+              captureProductEvent('ai upgrade cta clicked', {
+                from_tier: 'anonymous',
+                cta: 'register',
+              });
+              useAnonymousLimitStore.getState().openModal();
+            },
+          },
+        }
+      : {};
   const banners = (
     <>
       {(status === 'error' || (status === 'pendingProposal' && error)) &&
         !quotaRefusalNeedsNoBanner && (
-          <RetryBanner message={errorMessage} {...retryTurn} {...reviewKey} />
+          <RetryBanner
+            message={errorMessage}
+            {...retryTurn}
+            {...reviewKey}
+            {...createAccount}
+          />
         )}
       {status === 'timeout' && (
         <RetryBanner message={t('ai.errors.timeout')} {...retryTurn} />

@@ -1,6 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { ApiClientError } from '@knowtis/api-client';
+import { ANONYMOUS_NOTE_LIMIT_CODE } from '@knowtis/shared-types';
 
 import { VoiceNoteRecorder } from './VoiceNoteRecorder';
 
@@ -43,7 +48,37 @@ vi.mock('@knowtis/data-access-notes', () => ({
   useCreateNote: () => ({ mutate: createNoteMutate, isPending: false }),
 }));
 
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+
+async function createNoteFromResult() {
+  const user = userEvent.setup();
+  render(<VoiceNoteRecorder />);
+  await user.click(
+    screen.getByRole('button', { name: 'ai.voice.recordVoiceNote' })
+  );
+  await user.click(
+    await screen.findByRole('button', { name: 'ai.voice.createNote' })
+  );
+}
+
+function failCreate(error: unknown) {
+  const [, options] = createNoteMutate.mock.calls[0] as [
+    unknown,
+    { onError: (error: unknown) => void },
+  ];
+  act(() => options.onError(error));
+}
+
 describe('VoiceNoteRecorder', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAnonymousLimitStore.setState({ showModal: false });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('creates the note without the images the model put in it', async () => {
     const user = userEvent.setup();
     render(<VoiceNoteRecorder />);
@@ -60,5 +95,37 @@ describe('VoiceNoteRecorder', () => {
       title: TITLE,
       content: `<p>${TRANSCRIBED}</p>`,
     });
+  });
+
+  it('offers the guest-limit dialog when a guest is past the note limit', async () => {
+    await createNoteFromResult();
+
+    failCreate(
+      new ApiClientError(
+        'Guest note limit reached',
+        403,
+        ANONYMOUS_NOTE_LIMIT_CODE
+      )
+    );
+
+    expect(useAnonymousLimitStore.getState().showModal).toBe(true);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('reports any other failure in its own words, not the server message', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const failure = new ApiClientError('Internal server error', 500);
+    await createNoteFromResult();
+
+    failCreate(failure);
+
+    expect(consoleError).toHaveBeenCalledWith(
+      '[VoiceNoteRecorder] Failed to create note:',
+      failure
+    );
+    expect(toast.error).toHaveBeenCalledWith('create.failedToCreate');
+    expect(useAnonymousLimitStore.getState().showModal).toBe(false);
   });
 });
