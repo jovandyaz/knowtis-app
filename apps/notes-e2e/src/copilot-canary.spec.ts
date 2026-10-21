@@ -5,6 +5,7 @@ import {
   BENIGN_TEXT,
   CANARY_HOST,
   clickEveryLink,
+  DRAW_TIME_MERMAID_COUNT,
   DRAW_TIME_PROPOSAL_HTML,
   enforceCsp,
   HOSTILE_MARKDOWN,
@@ -106,7 +107,8 @@ test('a chat link whose scheme the chat strips opens nothing on a plain click', 
   const clicks = await clickEveryLink(owner.page, answer);
   expect(clicks.navigations).toEqual([]);
   expect(clicks.clicked).toBe(1);
-  expect(foreignRequests.urls).toEqual([]);
+  await foreignRequests.probe(owner.page);
+  expect(foreignRequests.urls).toEqual(foreignRequests.probeOnly);
 });
 
 test('a hostile proposal card and its diagrams load nothing and its links open nothing on a plain click', async ({
@@ -220,6 +222,7 @@ test('the production img-src CSP stops what Mermaid fetches while it draws', asy
       .getByRole('group', { name: CREATE_TITLE_RE })
       .getByTestId('proposal-preview');
     await expect(preview.getByText(BENIGN_TEXT)).toBeVisible();
+    await expectDiagrams(preview, DRAW_TIME_MERMAID_COUNT);
     await expect.poll(violations).not.toEqual([]);
     await foreignRequests.probe(owner.page);
 

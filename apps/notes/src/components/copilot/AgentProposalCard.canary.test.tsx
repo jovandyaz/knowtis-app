@@ -106,10 +106,10 @@ describe('AgentProposalCard under a compromised model', () => {
       const clickHref = HOSTILE_MERMAID.find(({ name }) =>
         name.includes('click href')
       );
-      const preview = await renderWithDiagram(
-        renderCard,
-        clickHref?.source ?? ''
-      );
+      if (!clickHref) {
+        throw new Error('HOSTILE_MERMAID has no "click href" diagram');
+      }
+      const preview = await renderWithDiagram(renderCard, clickHref.source);
 
       const outcome = plainClickOutcome(preview);
 

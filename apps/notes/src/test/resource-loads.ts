@@ -10,6 +10,9 @@ export interface ResourceLoad {
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const FRAGMENT_PREFIX = '#';
 const REPLACEMENT_CODE_POINT = 0xfffd;
+const MAX_CODE_POINT = 0x10ffff;
+const SURROGATE_MIN = 0xd800;
+const SURROGATE_MAX = 0xdfff;
 
 const IMG = 'img';
 const VIDEO = 'video';
@@ -59,11 +62,18 @@ const CSS_STRING_FUNCTION =
   /\b(?:image-set|image|src)\(\s*(['"])([\s\S]*?)\1/gi;
 const CSS_IMPORT = /@import\s+(['"])([\s\S]*?)\1/gi;
 
+function cssEscapeCodePoint(hex: string): number {
+  const codePoint = parseInt(hex, 16);
+  const replaced =
+    codePoint === 0 ||
+    codePoint > MAX_CODE_POINT ||
+    (codePoint >= SURROGATE_MIN && codePoint <= SURROGATE_MAX);
+  return replaced ? REPLACEMENT_CODE_POINT : codePoint;
+}
+
 function decodeCssEscapes(css: string): string {
   return css.replace(CSS_ESCAPE, (_, hex: string | undefined, char: string) =>
-    hex === undefined
-      ? char
-      : String.fromCodePoint(parseInt(hex, 16) || REPLACEMENT_CODE_POINT)
+    hex === undefined ? char : String.fromCodePoint(cssEscapeCodePoint(hex))
   );
 }
 

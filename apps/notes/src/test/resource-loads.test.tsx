@@ -11,7 +11,11 @@ import {
   STORED_IMAGE_URL,
 } from './hostile-markdown';
 import { plainClickOutcome } from './link-navigation';
-import { foreignLoads, recordResourceLoads } from './resource-loads';
+import {
+  foreignLoads,
+  recordResourceLoads,
+  resourceLoadsOf,
+} from './resource-loads';
 
 function injectRaw(html: string): HTMLElement {
   const region = document.createElement('div');
@@ -140,6 +144,16 @@ describe('recordResourceLoads', () => {
 
     expect(loads).toContainEqual({ via: 'img[src]', url: STORED_IMAGE_URL });
     expect(foreignLoads(loads)).toEqual([]);
+  });
+
+  it('records a CSS url() whose escapes name no valid code point', () => {
+    const url = 'https://canary.invalid/x\\ffffff\\d800\\0';
+    const element = document.createElement('div');
+    element.setAttribute('style', `background: url(${url})`);
+
+    expect(resourceLoadsOf(element)).toEqual([
+      { via: 'div[style]', url: 'https://canary.invalid/x���' },
+    ]);
   });
 
   it('ignores a same-document fragment reference', async () => {

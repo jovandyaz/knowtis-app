@@ -166,6 +166,7 @@ export const HOSTILE_PROPOSAL_HTML = [
 ].join('');
 
 export const HOSTILE_MERMAID_COUNT = HOSTILE_MERMAID.length;
+export const DRAW_TIME_MERMAID_COUNT = DRAW_TIME_MERMAID.length;
 
 /** A proposed note body whose diagrams fetch while Mermaid draws them. */
 export const DRAW_TIME_PROPOSAL_HTML = [
