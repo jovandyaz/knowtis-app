@@ -60,4 +60,18 @@ describe('collectSources', () => {
 
     expect([...sink.keys()]).toEqual(['opened']);
   });
+
+  it('credits no note whose content the injection guard withheld', () => {
+    const sink = new Map<string, AgentSource>();
+
+    collectSources(
+      [
+        result('getNote', { ...note('withheld'), contentStatus: 'withheld' }),
+        result('getNote', { ...note('read'), contentStatus: 'complete' }),
+      ],
+      sink
+    );
+
+    expect([...sink.keys()]).toEqual(['read']);
+  });
 });

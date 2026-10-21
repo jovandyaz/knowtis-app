@@ -94,6 +94,7 @@ export interface PendingProposal {
   kind: 'create' | 'update' | 'share';
   targetNoteId: string | null;
   payload: Record<string, unknown>;
+  readForeignContent?: boolean;
 }
 
 export interface UpdateProposal extends PendingProposal {

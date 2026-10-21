@@ -572,6 +572,7 @@
         "reasonPlaceholder": "Why? (optional)",
         "viewer": "Viewer",
         "editor": "Editor",
+        "foreignContentWarning": "This suggestion came after reading content from the web or someone else's note. Check the recipient before sharing.",
         "committed": {
           "create": "Note created: «{{title}}»",
           "update": "Note updated: «{{title}}»",

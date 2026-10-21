@@ -72,16 +72,16 @@ export function filterExternalHits(
   opts: { readonly maxHits: number; readonly maxChars: number }
 ): SafeExternalSource[] {
   return hits
-    .filter(
-      (h) =>
-        isHttpUrl(h.url) &&
-        detectPromptInjection(h.title).safe &&
-        detectPromptInjection(h.content).safe
-    )
-    .slice(0, opts.maxHits)
     .map((h) => ({
       title: h.title,
       url: h.url,
       snippet: h.content.slice(0, opts.maxChars),
-    }));
+    }))
+    .filter(
+      (source) =>
+        isHttpUrl(source.url) &&
+        detectPromptInjection(source.title).safe &&
+        detectPromptInjection(source.snippet).safe
+    )
+    .slice(0, opts.maxHits);
 }

@@ -26,6 +26,8 @@ import { honoursToolChoiceNone } from '../../../ai/infrastructure/providers/tool
 import type { TraceIdentityAttrs } from '../../../ai/infrastructure/providers/trace-identity';
 import { turnProviderOptions } from '../../../ai/infrastructure/providers/turn-provider-options';
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
+import type { AgentMessage } from '../../domain/agent-message';
+import { readsForeignContent } from '../../domain/memory-taint';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import {
   SYNTHESIS_REQUEST,
@@ -230,6 +232,7 @@ export async function* runAgentStepLoop(
   const failoverCandidates = [...params.stepFailoverCandidates];
 
   let history: ModelMessage[] = [...params.initialMessages];
+  const readBeforeThisStep: AgentMessage[] = [...input.messages];
   const turn: TurnState = {
     progressed: false,
     textDeltas: 0,
@@ -519,10 +522,16 @@ export async function* runAgentStepLoop(
             yield {
               type: 'proposal',
               proposal: captured,
+              ...(captured.kind === 'share' && {
+                readForeignContent:
+                  input.historyReadForeignContent === true ||
+                  readsForeignContent(readBeforeThisStep),
+              }),
               usage: turnUsageEvent(turnUsage, currentModel),
             };
             return;
           }
+          readBeforeThisStep.push(...stepRows);
           const spentTurnTokens =
             turnUsage.inputTokens + turnUsage.outputTokens;
           const wantsMoreTools =

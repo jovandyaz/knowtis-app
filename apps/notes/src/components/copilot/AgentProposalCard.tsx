@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { PendingProposal } from '@/stores/agent.store';
-import { FilePlus2, PencilLine, UserPlus, type LucideIcon } from 'lucide-react';
+import {
+  FilePlus2,
+  PencilLine,
+  TriangleAlert,
+  UserPlus,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { Badge, Button, cn } from '@knowtis/design-system';
 import { ReadOnlyEditor } from '@knowtis/editor';
@@ -126,6 +132,20 @@ export function AgentProposalCard({
               </div>
             )
           )}
+
+          {proposal.kind === 'share' &&
+            proposal.readForeignContent === true && (
+              <p
+                role="alert"
+                className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-xs text-foreground"
+              >
+                <TriangleAlert
+                  aria-hidden="true"
+                  className="mt-px size-3.5 shrink-0 text-warning"
+                />
+                <span>{t('ai.copilot.proposal.foreignContentWarning')}</span>
+              </p>
+            )}
         </div>
 
         <ConfirmationFooter>

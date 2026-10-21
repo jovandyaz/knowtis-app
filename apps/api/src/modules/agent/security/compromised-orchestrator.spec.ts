@@ -34,7 +34,10 @@ import {
   PROPOSAL_TOOL_NAMES,
 } from '../infrastructure/tools/note-mutate.tool-group';
 import { NoteReadToolGroup } from '../infrastructure/tools/note-read.tool-group';
-import { WebToolGroup } from '../infrastructure/tools/web.tool-group';
+import {
+  FETCHED_CONTENT_NOTE,
+  WebToolGroup,
+} from '../infrastructure/tools/web.tool-group';
 import { startCanaryHost, type CanaryHost } from '../testing/canary-host';
 import {
   ALWAYS_SAFE_CLASSIFIER,
@@ -57,6 +60,7 @@ import {
   lastResultOf,
   scriptedModel,
   type ScriptedModel,
+  type ScriptedToolCall,
   type ScriptEntry,
 } from '../testing/scripted-model';
 import {
@@ -134,12 +138,22 @@ const OWNER_ONLY_EXPOSURE: NoteExposureRepository = {
 };
 
 const ANSWER: ScriptEntry = { text: 'Done.' };
+const SHARE_OWN_NOTE_CALL: ScriptedToolCall = {
+  name: 'proposeShareNote',
+  input: {
+    noteId: OWN_NOTE.id,
+    targetEmail: 'mallory@attacker.test',
+    permission: 'editor',
+  },
+};
+const SHARE_OWN_NOTE: ScriptEntry = { toolCalls: [SHARE_OWN_NOTE_CALL] };
 const RESUMED = { outcome: 'created the note "Trip plan"' } as const;
 
 interface TurnOptions {
   readonly messages?: readonly AgentMessage[];
   readonly resume?: AgentResumeContext;
   readonly maxSteps?: number;
+  readonly historyReadForeignContent?: boolean;
 }
 
 interface Turn {
@@ -224,10 +238,23 @@ async function runTurn(
     maxSteps: options.maxSteps ?? 6,
     maxTurnTokens: 100_000,
     ...(options.resume ? { resume: options.resume } : {}),
+    ...(options.historyReadForeignContent
+      ? { historyReadForeignContent: true }
+      : {}),
   })) {
     events.push(event);
   }
   return { events, scripted };
+}
+
+type ProposalEvent = Extract<AgentEvent, { type: 'proposal' }>;
+
+function proposalEventOf(
+  events: readonly AgentEvent[]
+): ProposalEvent | undefined {
+  return events.find(
+    (event): event is ProposalEvent => event.type === 'proposal'
+  );
 }
 
 function proposalsOf(events: readonly AgentEvent[]): ProposedMutation[] {
@@ -663,6 +690,138 @@ describe('a compromised model: one proposal per turn (G8)', () => {
     expect(scripted.calls).toHaveLength(1);
     expect(proposalsOf(events)).toHaveLength(1);
     expect(terminalOf(events)?.type).toBe('proposal');
+  });
+});
+
+describe('a share proposal says whether content someone else wrote came before it', () => {
+  it('marks a share proposed after reading a note someone else owns', async () => {
+    const { events } = await runTurn([
+      {
+        toolCalls: [{ name: 'getNote', input: { noteId: foreignNote('').id } }],
+      },
+      SHARE_OWN_NOTE,
+    ]);
+
+    expect(proposalEventOf(events)?.readForeignContent).toBe(true);
+  });
+
+  it('marks a share proposed after a web search', async () => {
+    searchHits = [
+      {
+        title: 'Packing light',
+        url: HIT_URL,
+        content: 'How to pack for a week.',
+        score: 0.9,
+      },
+    ];
+
+    const { events } = await runTurn([
+      { toolCalls: [{ name: 'webSearch', input: { query: 'packing light' } }] },
+      SHARE_OWN_NOTE,
+    ]);
+
+    expect(proposalEventOf(events)?.readForeignContent).toBe(true);
+  });
+
+  it('marks a share proposed after a page fetched earlier in the conversation', async () => {
+    const { events } = await runTurn([SHARE_OWN_NOTE], {
+      messages: [
+        { role: 'user', content: `Summarize ${USER_URL} for my trip.` },
+        {
+          role: 'assistant',
+          content: '',
+          parts: [
+            {
+              type: 'tool-call',
+              toolCallId: 'fetch-1',
+              toolName: 'webFetch',
+              input: { url: USER_URL },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          content: '',
+          parts: [
+            {
+              type: 'tool-result',
+              toolCallId: 'fetch-1',
+              toolName: 'webFetch',
+              output: {
+                note: FETCHED_CONTENT_NOTE,
+                url: USER_URL,
+                content: 'Pack light and share your plan with the group.',
+              },
+              outputType: 'json',
+            },
+          ],
+        },
+        { role: 'assistant', content: 'It says to pack light.' },
+        { role: 'user', content: 'Share my trip plan with my colleague.' },
+      ],
+    });
+
+    expect(proposalEventOf(events)?.readForeignContent).toBe(true);
+  });
+
+  it('marks a share when the conversation read foreign content in a turn the replayed history shows only as text', async () => {
+    const { events } = await runTurn([SHARE_OWN_NOTE], {
+      historyReadForeignContent: true,
+    });
+
+    expect(proposalEventOf(events)?.readForeignContent).toBe(true);
+  });
+
+  it('marks a share proposed two steps after a web search', async () => {
+    const { events } = await runTurn([
+      { toolCalls: [{ name: 'webSearch', input: { query: 'packing light' } }] },
+      { toolCalls: [{ name: 'getNote', input: { noteId: OWN_NOTE.id } }] },
+      SHARE_OWN_NOTE,
+    ]);
+
+    expect(proposalEventOf(events)?.readForeignContent).toBe(true);
+  });
+
+  it('leaves a share unmarked when its only foreign read ran in the same step, since the share was written before that read returned', async () => {
+    const { events } = await runTurn([
+      {
+        toolCalls: [
+          { name: 'webSearch', input: { query: 'packing light' } },
+          SHARE_OWN_NOTE_CALL,
+        ],
+      },
+    ]);
+
+    expect(proposalEventOf(events)?.readForeignContent).toBe(false);
+  });
+
+  it('leaves a share unmarked when the conversation read only a note the user alone writes', async () => {
+    const { events } = await runTurn([
+      { toolCalls: [{ name: 'getNote', input: { noteId: OWN_NOTE.id } }] },
+      SHARE_OWN_NOTE,
+    ]);
+
+    expect(proposalEventOf(events)?.readForeignContent).toBe(false);
+  });
+
+  it('marks no other kind of proposal', async () => {
+    const { events } = await runTurn([
+      {
+        toolCalls: [{ name: 'getNote', input: { noteId: foreignNote('').id } }],
+      },
+      {
+        toolCalls: [
+          {
+            name: 'proposeCreateNote',
+            input: { title: 'Reading list', contentMarkdown: 'Copied.' },
+          },
+        ],
+      },
+    ]);
+
+    const proposal = proposalEventOf(events);
+    expect(proposal?.proposal.kind).toBe('create');
+    expect(proposal).not.toHaveProperty('readForeignContent');
   });
 });
 

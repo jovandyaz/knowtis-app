@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { MESSAGE_KIND } from '@knowtis/shared-types';
 
-import type { AgentMessagePart } from './agent-message';
+import type { AgentMessage, AgentMessagePart } from './agent-message';
 import {
   MEMORY_SAFE_TOOLS,
   MEMORY_WEB_TOOLS,
   memoryTranscript,
   memoryTranscriptOfWindow,
+  readsForeignContent,
   type MemoryTaintReason,
   type MemoryTranscriptOptions,
 } from './memory-taint';
@@ -724,5 +725,88 @@ describe('the memory tool lists', () => {
     const safe = new Set<string>(MEMORY_SAFE_TOOLS);
 
     expect(MEMORY_WEB_TOOLS.filter((name) => safe.has(name))).toEqual([]);
+  });
+});
+
+function messagesOf(rows: readonly ConversationMessageRow[]): AgentMessage[] {
+  return rows.map(({ role, content, parts }) =>
+    parts ? { role, content, parts } : { role, content }
+  );
+}
+
+describe('readsForeignContent', () => {
+  it('is false when the messages read only notes the user alone can write', () => {
+    const messages = messagesOf([
+      ...plainTurn('t1'),
+      ...toolTurn('t2', 'searchNotes', {
+        hits: [{ ...OWN_NOTE, editableByOthers: false }],
+      }),
+      ...toolTurn(
+        't3',
+        'getNote',
+        {
+          ...OWN_NOTE,
+          content: 'body',
+          contentStatus: 'complete',
+          editableByOthers: false,
+        },
+        { noteId: NOTE_ID }
+      ),
+    ]);
+
+    expect(readsForeignContent(messages)).toBe(false);
+  });
+
+  it.each<[string, ConversationMessageRow[]]>([
+    [
+      'a web search',
+      toolTurn('t2', 'webSearch', { results: [] }, { query: 'q' }),
+    ],
+    [
+      'a fetched page',
+      toolTurn(
+        't2',
+        'webFetch',
+        { content: 'page' },
+        { url: 'https://a.example' }
+      ),
+    ],
+    [
+      'a note shared with the user',
+      toolTurn(
+        't2',
+        'getNote',
+        { ...SHARED_NOTE, content: 'body', contentStatus: 'complete' },
+        { noteId: NOTE_ID }
+      ),
+    ],
+    [
+      'a note someone else can edit',
+      toolTurn(
+        't2',
+        'getNote',
+        {
+          ...OWN_NOTE,
+          content: 'body',
+          contentStatus: 'complete',
+          editableByOthers: true,
+        },
+        { noteId: NOTE_ID }
+      ),
+    ],
+    [
+      'a note whose content was withheld',
+      toolTurn(
+        't2',
+        'getNote',
+        { ...OWN_NOTE, content: '[withheld]', contentStatus: 'withheld' },
+        { noteId: NOTE_ID }
+      ),
+    ],
+    ['a tool no list classifies', toolTurn('t2', 'runShell', { ok: true })],
+  ])('is true once the messages read %s', (_what, rows) => {
+    expect(readsForeignContent(messagesOf([...plainTurn('t1'), ...rows]))).toBe(
+      true
+    );
   });
 });

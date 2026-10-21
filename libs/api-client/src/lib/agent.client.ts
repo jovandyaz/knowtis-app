@@ -93,6 +93,8 @@ export interface AgentProposalPayload {
   payload: Record<string, unknown>;
   /** Absent from servers that predate used-memory tracking. */
   memories?: RecalledMemory[];
+  /** Share proposals only: the model had read content someone other than the user may have written when it proposed. Absent from servers that predate it. */
+  readForeignContent?: boolean;
 }
 
 export interface AgentCommittedPayload {

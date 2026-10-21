@@ -572,6 +572,7 @@
         "reasonPlaceholder": "¿Por qué? (opcional)",
         "viewer": "Lector",
         "editor": "Editor",
+        "foreignContentWarning": "Esta sugerencia llegó después de leer contenido de la web o la nota de otra persona. Revisa el destinatario antes de compartir.",
         "committed": {
           "create": "Nota creada: «{{title}}»",
           "update": "Nota actualizada: «{{title}}»",

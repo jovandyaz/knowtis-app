@@ -43,6 +43,8 @@ export type AgentEvent =
   | {
       readonly type: 'proposal';
       readonly proposal: ProposedMutation;
+      /** Share proposals only: the model had read content someone other than the user may have written when it proposed. */
+      readonly readForeignContent?: boolean;
       readonly usage: AgentTurnUsage;
     }
   | { readonly type: 'aborted'; readonly usage: AgentTurnUsage }

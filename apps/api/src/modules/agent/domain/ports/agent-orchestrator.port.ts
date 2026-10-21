@@ -18,6 +18,8 @@ export interface AgentRunInput {
   readonly signal?: AbortSignal;
   readonly resume?: AgentResumeContext;
   readonly knownNotes?: readonly AgentSource[];
+  /** A loaded row of the conversation, replayed whole or pruned to text, read content someone other than the user may have written. */
+  readonly historyReadForeignContent?: boolean;
   readonly userMemories?: readonly string[];
   readonly byokApiKey?: string;
   /** Efforts for the model about to be served, within its own ladder; awaited again on every failover so a rescue model is never handed another model's levels. */
