@@ -80,6 +80,9 @@ export function CreateKeyDialog({ open, onOpenChange }: CreateKeyDialogProps) {
   const selectedScopes = watch('scopes');
 
   const handleClose = () => {
+    if (createKey.isPending) {
+      return;
+    }
     onOpenChange(false);
     // Reset after animation
     setTimeout(() => {

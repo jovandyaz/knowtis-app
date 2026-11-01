@@ -24,6 +24,7 @@ const anonymousWrapper = createAuthWrapper(createAuthApiMock(), {
 });
 
 const mutate = vi.fn();
+const createKeyState = { isPending: false };
 const CREATED_KEY = 'knowtis_created_key';
 
 vi.mock('react-i18next', () => ({
@@ -34,13 +35,27 @@ vi.mock('sonner', () => ({
 }));
 vi.mock('@knowtis/data-access-mcp-keys', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  useCreateMcpKey: () => ({ mutate, isPending: false }),
+  useCreateMcpKey: () => ({ mutate, isPending: createKeyState.isPending }),
 }));
 
 describe('CreateKeyDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useVerifyEmailStore.setState({ isOpen: false });
+    createKeyState.isPending = false;
+  });
+
+  it('stays open while the key is being created, so a one-time key cannot be lost', async () => {
+    createKeyState.isPending = true;
+    const onOpenChange = vi.fn();
+    render(<CreateKeyDialog open onOpenChange={onOpenChange} />, { wrapper });
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'labels.closeDialog' })
+    );
+    await userEvent.keyboard('{Escape}');
+
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 
   it('offers verification rather than a raw error when the gate refuses the key', async () => {
