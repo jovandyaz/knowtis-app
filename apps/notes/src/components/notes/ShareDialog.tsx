@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useQueryClient } from '@tanstack/react-query';
@@ -48,7 +48,7 @@ import { LinkAccessSection } from './share/LinkAccessSection';
 import { PeopleAccessSection } from './share/PeopleAccessSection';
 import { RotateShareLinkDialog } from './share/RotateShareLinkDialog';
 
-type ToastKey =
+type AccessStatusKey =
   | 'share.linkCreatedToast'
   | 'share.linkPausedToast'
   | 'share.linkResumedToast'
@@ -56,10 +56,10 @@ type ToastKey =
   | 'share.permissionViewerToast'
   | 'share.people.saved';
 
-function accessToastKey(
+function accessStatusKey(
   next: GeneralAccessLevel,
   shareToken: string | null
-): ToastKey {
+): AccessStatusKey {
   if (next === GENERAL_ACCESS.RESTRICTED) {
     return 'share.linkPausedToast';
   }
@@ -126,6 +126,7 @@ function ShareDialogAccess({
   const gate = useVerifyEmailGate();
   const [accessError, setAccessError] = useState<string | null>(null);
   const [accessStatus, setAccessStatus] = useState<string | null>(null);
+  const accessStatusRef = useRef<HTMLParagraphElement>(null);
   const hasFreshData =
     people.isFetchedAfterMount &&
     authority.isFetchedAfterMount &&
@@ -177,7 +178,10 @@ function ShareDialogAccess({
       client.invalidateQueries({ queryKey: notesQueryKeys.detail(noteId) }),
     ]);
   };
-  const applyAccessChange = (input: UpdateNoteInput, successKey: ToastKey) => {
+  const applyAccessChange = (
+    input: UpdateNoteInput,
+    successKey: AccessStatusKey
+  ) => {
     if (disabled || !isOwner) {
       return;
     }
@@ -187,7 +191,9 @@ function ShareDialogAccess({
       try {
         await updateNote.mutateAsync({ id: noteId, input });
         setAccessStatus(t(successKey));
-        toast.success(t(successKey));
+        if (!accessStatusRef.current) {
+          toast.success(t(successKey));
+        }
       } catch (error) {
         if (gate.handleError(error)) {
           setAccessError(t('share.people.verifyRequired'));
@@ -282,7 +288,7 @@ function ShareDialogAccess({
             if (next !== generalAccess) {
               applyAccessChange(
                 { generalAccess: next },
-                accessToastKey(next, shareToken)
+                accessStatusKey(next, shareToken)
               );
             }
           }}
@@ -344,11 +350,13 @@ function ShareDialogAccess({
           {accessError}
         </p>
       ) : null}
-      {accessStatus ? (
-        <p role="status" className="text-sm text-(--muted-foreground)">
-          {accessStatus}
-        </p>
-      ) : null}
+      <p
+        ref={accessStatusRef}
+        role="status"
+        className="text-sm text-(--muted-foreground) empty:absolute"
+      >
+        {accessStatus}
+      </p>
     </div>
   );
 }

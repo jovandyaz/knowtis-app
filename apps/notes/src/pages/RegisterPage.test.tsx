@@ -70,11 +70,16 @@ describe('RegisterPage', () => {
 
     await submitRegistration();
 
-    expect(await screen.findByLabelText(CODE_LABEL)).toBeInTheDocument();
+    const codeField = await screen.findByLabelText(CODE_LABEL);
+    expect(codeField).toHaveFocus();
+    expect(codeField).toHaveAccessibleDescription(
+      expect.stringContaining(EMAIL)
+    );
     expect(screen.getByText(EMAIL)).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Verify email' })
     ).toBeInTheDocument();
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 
   it('takes the verified user into the app', async () => {
@@ -88,6 +93,7 @@ describe('RegisterPage', () => {
       expect(navigate).toHaveBeenCalledWith({ to: APP_HOME })
     );
     expect(api.verifyEmailCode).toHaveBeenCalledWith(CODE);
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
     expect(toastSuccess).toHaveBeenCalledWith('Email verified successfully!');
   });
 

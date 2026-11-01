@@ -60,6 +60,16 @@ describe('VerifyCodeStep', () => {
     expect(screen.getByLabelText(CODE_LABEL)).toHaveFocus();
   });
 
+  it('tells assistive tech where the code went as the field takes focus', () => {
+    renderStep();
+
+    const codeField = screen.getByLabelText(CODE_LABEL);
+    expect(codeField).toHaveFocus();
+    expect(codeField).toHaveAccessibleDescription(
+      expect.stringContaining(EMAIL)
+    );
+  });
+
   it('verifies the emailed code without leaving the screen', async () => {
     const { api, onVerified } = renderStep();
 
