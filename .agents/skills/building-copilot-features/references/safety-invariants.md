@@ -24,7 +24,7 @@ agent:message → orchestrator runs tools → mutate tool emits proposal
 ## Fallback chain and provider registry
 
 - `ProviderRegistryFactory` runs in gateway mode (`AI_GATEWAY_API_KEY` → Vercel AI Gateway, slash-format model ids) or direct mode; callers always use colon-format ids.
-- `FallbackChainService`: primary → `AI_FALLBACK_CHAIN`, skipping providers without keys or in cooldown (unless that leaves zero providers).
+- `FallbackChainService`: primary → the `ai_fallback_chain` row or the derived chain, skipping providers without keys or in cooldown (unless that leaves zero providers).
 - Streams never switch model mid-stream. Aborted requests never advance the chain. The reported model is the one that actually served the request.
 - `ProviderCooldownTracker` is a circuit breaker per provider.
 
@@ -32,14 +32,14 @@ agent:message → orchestrator runs tools → mutate tool emits proposal
 
 - User keys encrypted AES-256-GCM under `BYOK_ENCRYPTION_KEY` (32-byte base64). **Never rotate this key once user keys are stored** — stored keys become undecryptable.
 - BYOK turns: injected per-request, skip the fallback chain, redact provider error details, bypass the daily budget but keep RPM limits, and tag `ai_usage.byok` for billing attribution.
-- Gated by the `agent_byok` DB flag.
+- Needs `BYOK_ENCRYPTION_KEY` and a non-anonymous account; storing a new key also needs a verified email.
 
 ## Retrieval and memory
 
-- Hybrid retrieval (flag-gated): FTS `ts_rank` + pgvector KNN fused via Reciprocal Rank Fusion; requires `VOYAGE_API_KEY` (embedding reconcile cron no-ops without it). Advisory lock `778493001` serializes the reconcile cron.
+- Hybrid retrieval: FTS `ts_rank` + pgvector KNN fused via Reciprocal Rank Fusion; requires `VOYAGE_API_KEY` (embedding reconcile cron no-ops without it). Advisory lock `778493001` serializes the reconcile cron.
 - Long-term memory (A6b): userId-scoped, Mem0-style ADD/UPDATE/DELETE/NOOP reconcile; advisory lock `778493002`. Thread memory (A6a) is per-conversation.
 
 ## Rate limits and flags
 
 - RPM and stream-concurrency limits are enforced in the gateway; BYOK does not lift them.
-- Feature flags live in the DB (`PUT /api/v1/flags/:key`), default off. Env key missing → the flag must stay off (services no-op cleanly).
+- `ai_enabled` is the only DB feature flag (`PUT /api/v1/flags/:key`). Env key missing → that feature no-ops cleanly.

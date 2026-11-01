@@ -38,4 +38,4 @@ Plus a REST `MemoryController` for listing/deleting long-term memories.
 1. `infrastructure/tools/<name>.tool-group.ts` implementing `AgentToolGroup` (`readonly name`, `tools(ctx)` factory).
 2. Register in `AgentToolRegistry` providers in `agent.module.ts`.
 3. Mutating tools emit proposals via the proposal collector — never apply directly.
-4. Flag-gate if the group depends on an external key (pattern: `web` group behind `agent_web_search`).
+4. Offer the group only when its external key is configured (pattern: `web` group behind `WebSearchPort.isConfigured()`).

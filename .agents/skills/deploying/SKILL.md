@@ -74,4 +74,4 @@ Affected applications determine the deploy jobs on a push to `main`: `notes` →
 | WebSocket not connecting | Check `VITE_WS_URL`, `/collaboration`, and auth first; check `REDIS_URL` only for cross-replica fan-out |
 | API does not boot | `TOKEN_HASH_KEY`, JWT secrets, and required URLs are present |
 | Deploy not triggering | Was the app affected and is the target service/project variable configured? |
-| App boots then 500s on AI routes | `ANTHROPIC_API_KEY` and DB feature flags |
+| App boots then 500s on AI routes | `OPENROUTER_API_KEY` and the `ai_enabled` DB flag |
