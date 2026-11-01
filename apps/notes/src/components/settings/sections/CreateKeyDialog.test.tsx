@@ -1,5 +1,5 @@
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +24,7 @@ const anonymousWrapper = createAuthWrapper(createAuthApiMock(), {
 });
 
 const mutate = vi.fn();
+const CREATED_KEY = 'knowtis_created_key';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
@@ -133,5 +134,43 @@ describe('CreateKeyDialog', () => {
       }),
       expect.anything()
     );
+  });
+
+  describe('once the key exists', () => {
+    async function createKey() {
+      const user = userEvent.setup();
+      mutate.mockImplementation((_input, { onSuccess }) => {
+        onSuccess({ key: CREATED_KEY });
+      });
+      render(<CreateKeyDialog open onOpenChange={vi.fn()} />, { wrapper });
+      await user.type(screen.getByRole('textbox'), 'clave de prueba');
+      await user.click(
+        screen.getByRole('button', { name: 'integrations.createKey' })
+      );
+      return user;
+    }
+
+    it('reveals it in a dialog that takes focus under its new title, without a toast', async () => {
+      await createKey();
+
+      expect(screen.getByDisplayValue(CREATED_KEY)).toBeInTheDocument();
+      const dialog = screen.getByRole('dialog', {
+        name: 'integrations.keyCreated',
+      });
+      await waitFor(() => expect(dialog).toHaveFocus());
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('confirms a copied key with a toast, its only feedback', async () => {
+      const user = await createKey();
+      vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+
+      await user.click(
+        screen.getByRole('button', { name: 'integrations.copyKey' })
+      );
+
+      expect(toast.success).toHaveBeenCalledTimes(1);
+      expect(toast.success).toHaveBeenCalledWith('integrations.keyCopied');
+    });
   });
 });

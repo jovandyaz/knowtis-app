@@ -115,7 +115,28 @@ describe('VerifyEmailPage', () => {
     ).toBeInTheDocument();
     expect(verifyEmail).toHaveBeenCalledTimes(1);
     expect(verifyEmail).toHaveBeenCalledWith(TOKEN);
-    expect(toast.success).toHaveBeenCalledTimes(1);
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('announces success through the live region the verifying state already mounted', async () => {
+    let settle!: () => void;
+    verifyEmail.mockReturnValue(
+      new Promise<void>((resolve) => {
+        settle = resolve;
+      })
+    );
+
+    renderAt(`?token=${TOKEN}`);
+    const liveRegion = await screen.findByText('verifyEmail.verifyingDesc');
+
+    settle();
+
+    expect(
+      await screen.findByText('verifyEmail.verifiedTitle')
+    ).toBeInTheDocument();
+    expect(liveRegion).toBeInTheDocument();
+    expect(liveRegion).toHaveAttribute('aria-live', 'polite');
+    expect(liveRegion).toHaveTextContent('verifyEmail.verifiedDesc');
   });
 
   it('says it is verifying while the redemption is in flight', async () => {

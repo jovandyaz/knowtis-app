@@ -7,6 +7,7 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClientError, notesApi } from '@knowtis/api-client';
@@ -77,6 +78,10 @@ afterEach(cleanup);
 
 const row = (person: NotePerson) =>
   within(screen.getByRole('listitem', { name: person.user.email }));
+const savedStatus = () =>
+  within(screen.getByRole('region', { name: 'People with access' })).getByRole(
+    'status'
+  );
 
 describe('People access interactions', () => {
   it('rejects invalid email locally with an associated error', async () => {
@@ -115,6 +120,8 @@ describe('People access interactions', () => {
   it('normalizes email, adds an authoritative person, and clears only a successful add draft', async () => {
     shareHarness().render();
     await waitForPeople();
+    const liveRegion = savedStatus();
+    expect(liveRegion).toBeEmptyDOMElement();
     await userEvent.type(
       screen.getByRole('textbox', { name: 'Email' }),
       ' NEW@Example.com '
@@ -126,7 +133,9 @@ describe('People access interactions', () => {
       email: 'new@example.com',
       permission: 'viewer',
     });
-    expect(screen.getByRole('status')).toHaveTextContent('Permissions saved.');
+    expect(savedStatus()).toBe(liveRegion);
+    expect(liveRegion).toHaveTextContent('Permissions saved.');
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it('keeps the email and permission draft when another person changes', async () => {
@@ -259,6 +268,16 @@ describe('People access interactions', () => {
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
+  it('keeps the saved status exposed to assistive tech while the removal dialog hides the rest', async () => {
+    shareHarness().render();
+    await waitForPeople();
+    const liveRegion = savedStatus();
+    await userEvent.click(
+      row(SHARE_VIEWER).getByRole('button', { name: 'Remove Viewer' })
+    );
+    expect(screen.getByRole('status')).toBe(liveRegion);
+  });
+
   it('preserves the confirmation on a failure and removes the row only after a successful retry', async () => {
     vi.mocked(notesApi.revokePerson).mockRejectedValueOnce(
       new ApiClientError('private details', 500)
@@ -298,7 +317,7 @@ describe('People access interactions', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       "Couldn't refresh access"
     );
-    expect(screen.getByRole('status')).toHaveTextContent('Permissions saved.');
+    expect(savedStatus()).toHaveTextContent('Permissions saved.');
     expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
     expect(screen.queryByText(SHARE_EDITOR.user.email)).not.toBeInTheDocument();
   });

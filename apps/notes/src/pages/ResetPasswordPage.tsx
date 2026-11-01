@@ -77,10 +77,7 @@ export function ResetPasswordPage() {
     resetPassword.mutate(
       { token, newPassword: data.password },
       {
-        onSuccess: () => {
-          toast.success(t('resetPassword.successToast'));
-          setSuccess(true);
-        },
+        onSuccess: () => setSuccess(true),
         onError: (error) => {
           if (checkRateLimit(error)) {
             toast.error(t('errors.tooManyAttempts', { ns: 'common' }));
@@ -124,7 +121,11 @@ export function ResetPasswordPage() {
   if (success) {
     return (
       <AuthPageLayout>
-        <CardHeader className="space-y-1 text-center">
+        <CardHeader
+          role="status"
+          aria-live="polite"
+          className="space-y-1 text-center"
+        >
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--primary)/10">
             <CheckCircle className="h-6 w-6 text-(--primary)" />
           </div>
@@ -153,7 +154,11 @@ export function ResetPasswordPage() {
 
   return (
     <AuthPageLayout>
-      <CardHeader className="space-y-1 text-center">
+      <CardHeader
+        role="status"
+        aria-live="polite"
+        className="space-y-1 text-center"
+      >
         <CardTitle className="text-2xl font-bold tracking-tight">
           {t('resetPassword.title')}
         </CardTitle>

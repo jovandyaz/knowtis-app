@@ -122,7 +122,7 @@ describe('ShareDialog authority', () => {
       message: 'Link paused. It stops working until you share again',
     },
   ])(
-    'confirms persisted link changes for $generalAccess',
+    'confirms persisted link changes for $generalAccess in a mounted status region, without a toast',
     async ({ generalAccess, shareToken, option, message }) => {
       vi.mocked(notesApi.getById).mockResolvedValue({
         ...SHARE_NOTE,
@@ -131,8 +131,12 @@ describe('ShareDialog authority', () => {
       });
       shareHarness().render();
       await waitForPeople();
+      const liveRegions = screen.getAllByRole('status');
+
       await userEvent.click(screen.getByRole('radio', { name: option }));
-      await waitFor(() => expect(toast.success).toHaveBeenCalledWith(message));
+
+      expect(liveRegions).toContain(await screen.findByText(message));
+      expect(toast.success).not.toHaveBeenCalled();
     }
   );
 

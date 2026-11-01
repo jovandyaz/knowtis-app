@@ -90,10 +90,7 @@ export function CreateKeyDialog({ open, onOpenChange }: CreateKeyDialogProps) {
 
   const onSubmit = (data: CreateMcpKeyFormValues) => {
     createKey.mutate(data, {
-      onSuccess: (response) => {
-        setRevealedKey(response.key);
-        toast.success(t('integrations.keyCreated'));
-      },
+      onSuccess: (response) => setRevealedKey(response.key),
       onError: (error: Error) => {
         if (!verifyEmailGate.handleError(error)) {
           toast.error(error.message);

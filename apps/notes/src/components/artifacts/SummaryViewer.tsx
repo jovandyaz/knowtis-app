@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Check, CheckCircle2, Copy } from 'lucide-react';
@@ -19,15 +19,29 @@ interface SummaryViewerProps {
 export function SummaryViewer({ artifact }: SummaryViewerProps) {
   const { t } = useTranslation('notes');
   const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const content = artifact.content;
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCopy = async () => {
     try {
       const text = content.keyPoints.map((p) => `• ${p}`).join('\n');
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast.success(t('ai.artifacts.summary.copied'));
-      setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+      copiedTimeoutRef.current = setTimeout(
+        () => setCopied(false),
+        COPY_FEEDBACK_MS
+      );
     } catch (error) {
       console.error('[SummaryViewer] clipboard write failed', error);
       toast.error(t('ai.artifacts.summary.copyError'));
@@ -37,6 +51,9 @@ export function SummaryViewer({ artifact }: SummaryViewerProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
+        <span role="status" aria-live="polite" className="sr-only">
+          {copied ? t('ai.artifacts.summary.copied') : ''}
+        </span>
         <Button variant="ghost" size="sm" onClick={handleCopy}>
           {copied ? (
             <Check className="mr-1.5 h-3.5 w-3.5" />

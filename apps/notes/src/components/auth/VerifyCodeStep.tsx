@@ -20,6 +20,7 @@ import { useVerifyEmailCodeForm } from './useVerifyEmailCodeForm';
 import { VerifyCodeSubmitButton } from './VerifyCodeSubmitButton';
 
 const CODE_FIELD_ID = 'verification-code';
+const CODE_SENT_TO_ID = 'verification-code-sent-to';
 
 export interface VerifyCodeStepProps {
   email: string;
@@ -49,7 +50,7 @@ export function VerifyCodeStep({
         <CardTitle className="text-2xl font-bold tracking-tight">
           {t('verifyEmail.checkEmail')}
         </CardTitle>
-        <CardDescription>
+        <CardDescription id={CODE_SENT_TO_ID}>
           {t('verifyEmail.sentCodeTo', { length: VERIFICATION_CODE_LENGTH })}{' '}
           <span className="font-medium text-(--foreground)">{email}</span>
         </CardDescription>
@@ -60,6 +61,7 @@ export function VerifyCodeStep({
           <OtpCodeField
             ref={codeInputRef}
             id={CODE_FIELD_ID}
+            descriptionId={CODE_SENT_TO_ID}
             form={form}
             autoFocus
           />

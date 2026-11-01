@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
@@ -11,7 +11,6 @@ import { useResendCooldown } from '@/hooks/useResendCooldown';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { useVerifyEmail } from '@jovandyaz/auth-react';
 import { AlertCircle, ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
 import {
@@ -36,16 +35,11 @@ export function VerifyEmailPage() {
   const resend = useResendCooldown({ startHeld: false });
   const { canVerify } = useVerifyEmailGate();
   const navigate = useNavigate();
-  const hasAnnounced = useRef(false);
 
-  const { isPending, isSuccess } = verifyEmail;
+  const { isPending } = verifyEmail;
   useEffect(() => {
-    if (!linkToken || isPending || hasAnnounced.current) {
+    if (!linkToken || isPending) {
       return;
-    }
-    hasAnnounced.current = true;
-    if (isSuccess) {
-      toast.success(t('verifyEmail.verifiedToast'));
     }
     // The token must not survive in history or in a referrer header.
     void navigate({
@@ -53,7 +47,7 @@ export function VerifyEmailPage() {
       search: {},
       replace: true,
     });
-  }, [linkToken, isPending, isSuccess, navigate, t]);
+  }, [linkToken, isPending, navigate]);
 
   if (!token) {
     return (
@@ -110,7 +104,9 @@ export function VerifyEmailPage() {
           <CardTitle className="text-2xl font-bold tracking-tight">
             {t('verifyEmail.verifiedTitle')}
           </CardTitle>
-          <CardDescription>{t('verifyEmail.verifiedDesc')}</CardDescription>
+          <CardDescription aria-live="polite">
+            {t('verifyEmail.verifiedDesc')}
+          </CardDescription>
         </CardHeader>
 
         <CardFooter>
