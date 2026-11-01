@@ -29,8 +29,7 @@
       "source": {
         "source": "github",
         "repo": "jovandyaz/knowtis-plugins"
-      },
-      "autoUpdate": true
+      }
     }
   }
 }
