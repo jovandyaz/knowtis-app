@@ -8,8 +8,9 @@ export const MEMORY_ENABLED_BY_DEFAULT = true;
 export const AGENT_MEMORY_REJECTED_CODE = 'AGENT_MEMORY_REJECTED';
 
 /**
- * Why a memory edit was refused: `content_policy` for a link, an email address, markup, code or an
- * invisible character, `injection` for text the injection guard reads as an instruction.
+ * Why a memory edit was refused: `content_policy` for a link, an email address, markup, code, an
+ * invisible character or an instruction to act on notes, `injection` for text the injection guard
+ * reads as an instruction.
  */
 export const MEMORY_EDIT_REJECTION_REASONS = [
   'content_policy',

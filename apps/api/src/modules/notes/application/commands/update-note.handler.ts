@@ -48,6 +48,7 @@ import {
 import { isTrivialHtml } from '../../infrastructure/trivial-html';
 import { decodeYjsStateUpdate } from '../../infrastructure/yjs-state-update';
 import { emitAccessChanged } from '../emit-access-changed';
+import { SHARING_FIELDS } from '../sharing-fields';
 
 export interface UpdateNoteInput {
   readonly noteId: string;
@@ -81,11 +82,6 @@ interface NoteState {
 }
 
 const CONTENT_FIELDS = ['title', 'content'] as const;
-const SHARING_FIELDS = [
-  'generalAccess',
-  'generalAccessPermission',
-  'editorsCanShare',
-] as const;
 const ORGANIZATION_COLUMNS = ['bucket'] as const;
 const ORGANIZATION_FIELDS = [
   ...ORGANIZATION_COLUMNS,

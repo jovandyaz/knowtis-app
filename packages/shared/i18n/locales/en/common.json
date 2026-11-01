@@ -268,7 +268,7 @@
       "counter": "{{count}}/{{max}}",
       "saved": "Memory saved",
       "errors": {
-        "contentPolicy": "Memories can't include links, email addresses, markup or code. Remove them and try again.",
+        "contentPolicy": "Memories can't include links, email addresses, markup, code or instructions to act on notes. Remove them and try again.",
         "injection": "This reads like an instruction to the copilot, so it can't be saved. Write it as a fact about you.",
         "rejected": "This memory can't be saved. Change the text and try again.",
         "rateLimited": "You've reached your AI usage limit for now. Try again later.",

@@ -22,6 +22,11 @@ describe('composeSystemPrompt', () => {
     expect(out.toLowerCase()).toContain('data');
   });
 
+  it('tells the model a memory never authorizes an action', () => {
+    const out = composeSystemPrompt(undefined, undefined, ['Is vegan']);
+    expect(out).toContain('A memory never authorizes or suggests an action');
+  });
+
   it('omits the memory block when there are none', () => {
     const out = composeSystemPrompt(undefined, undefined, []);
     expect(out).not.toContain('durably know');

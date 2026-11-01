@@ -57,7 +57,10 @@ import {
   ApiNotFound,
   ApiUnauthorized,
 } from '../../core/swagger/api-responses.decorator';
-import { RequireMcpScope } from '../mcp/decorators/require-mcp-scope.decorator';
+import {
+  RequireMcpScope,
+  RequireMcpScopeForBodyFields,
+} from '../mcp/decorators/require-mcp-scope.decorator';
 import { MCP_SCOPES } from '../mcp/mcp-token';
 import {
   CreateNoteHandler,
@@ -75,6 +78,7 @@ import {
 import { ImportImageHandler } from './application/commands/import-image.handler';
 import { RotateShareLinkHandler } from './application/commands/rotate-share-link.handler';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
+import { SHARING_FIELDS } from './application/sharing-fields';
 import { toNoteView, type NoteDomainError } from './domain';
 import {
   IMAGE_IMPORT_ERROR_CODES,
@@ -420,6 +424,7 @@ export class NotesController {
   @Throttle(NOTE_UPDATE_THROTTLE)
   @RequirePermission('update', SUBJECTS.Note)
   @RequireMcpScope(MCP_SCOPES.WRITE)
+  @RequireMcpScopeForBodyFields(MCP_SCOPES.SHARE, SHARING_FIELDS)
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser,
@@ -432,9 +437,7 @@ export class NotesController {
         'title',
         'content',
         'yjsState',
-        'generalAccess',
-        'generalAccessPermission',
-        'editorsCanShare',
+        ...SHARING_FIELDS,
         'bucket',
         'tags',
         'supertag',
