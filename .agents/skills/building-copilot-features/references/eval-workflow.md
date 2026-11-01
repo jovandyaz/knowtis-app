@@ -2,7 +2,7 @@
 
 Canonical source: `apps/api/src/modules/agent/eval/` and its README section.
 
-The eval harness is **opt-in and non-CI**: it boots the real `AgentModule` via Vitest + `unplugin-swc` (SWC is required for NestJS `emitDecoratorMetadata`) and drives `orchestrator.run()` against deterministic note fixtures with a live model.
+The eval harness is **opt-in locally and excluded from PR CI and `nx affected`**; `nightly-eval.yml` runs it weekly and `model-gate.yml` daily. It boots the real `AgentModule` via Vitest + `unplugin-swc` (SWC is required for NestJS `emitDecoratorMetadata`) and drives `orchestrator.run()` against deterministic note fixtures with a live model.
 
 ## Running
 

@@ -20,7 +20,6 @@ package-lock.json
 *.gen.ts
 packages/ai-gateway/src/catalog/model-index.snapshot.ts
 .agents/skills
-.opencode/agents
 
 # Design system build
 libs/design-system/build

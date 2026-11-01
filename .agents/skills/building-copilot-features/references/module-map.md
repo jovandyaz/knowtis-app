@@ -27,15 +27,15 @@ Plus a REST `MemoryController` for listing/deleting long-term memories.
 | `memory.repository` | `infrastructure/persistence/drizzle-memory.repository.ts` |
 | `note-embedding.repository` | `infrastructure/retrieval/drizzle-note-embedding.repository.ts` |
 | `pending-mutation.store` | `infrastructure/pending/redis-pending-mutation.store.ts` |
-| `retrieval.port` | `infrastructure/retrieval/feature-flagged-retrieval.adapter.ts` |
+| `retrieval.port` | `infrastructure/retrieval/hybrid-retrieval.adapter.ts` |
 
 **application/** — one `execute` per handler: `run-agent-turn` (resolves server-authoritative conversation, loads history + knownNotes, retrieval + memory, drives orchestrator, parks proposals), `approve-mutation`, `reject-mutation`.
 
-**infrastructure/** — `orchestrator/` (Vercel AI SDK tool loop, tool registry, system-prompt composer, proposal collector), `tools/` (groups: `note-read`, `note-mutate`, `web`), `retrieval/` (keyword, hybrid FTS+pgvector+RRF, feature-flagged adapter, reconcile cron), `memory/` (extraction cron), `pending/` (Redis store), `persistence/`, `sanitize/` (HTML sanitizer for tool-generated note HTML).
+**infrastructure/** — `orchestrator/` (Vercel AI SDK tool loop, tool registry, system-prompt composer, proposal collector), `tools/` (groups: `note-read`, `note-mutate`, `web`), `retrieval/` (keyword, hybrid FTS+pgvector+RRF, reconcile cron), `memory/` (extraction cron), `pending/` (Redis store), `persistence/`, `sanitize/` (HTML sanitizer for tool-generated note HTML).
 
 ## Adding a tool group
 
-1. `infrastructure/tools/<name>.tool-group.ts` implementing `AgentToolGroup` (`readonly name`, `tools(ctx)` factory).
+1. `infrastructure/tools/<name>.tool-group.ts` implementing `AgentToolGroup` (`readonly name`, `availableIn(phase)`, `build(ctx)`).
 2. Register in `AgentToolRegistry` providers in `agent.module.ts`.
 3. Mutating tools emit proposals via the proposal collector — never apply directly.
-4. Flag-gate if the group depends on an external key (pattern: `web` group behind `agent_web_search`).
+4. Offer the group only when its external key is configured (pattern: the `web` group's `availableIn` returns `WebSearchPort.isConfigured()`).
