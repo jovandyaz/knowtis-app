@@ -1,7 +1,7 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy, type SecretOrKeyProvider } from 'passport-jwt';
+import { Strategy, type SecretOrKeyProvider } from 'passport-jwt';
 
 import {
   JWT_AUDIENCE_ACCESS,
@@ -10,6 +10,7 @@ import {
   SESSION_REPOSITORY,
   USER_REPOSITORY,
 } from '../constants';
+import { extractBearerToken } from '../extract-bearer-token';
 import type { JwtVerificationKeySelector } from '../jwt-verification-key-selector';
 import type { SessionRepository } from '../ports/session.repository';
 import type { JwtPayload } from '../ports/token.service';
@@ -103,7 +104,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt-hs256') {
     private readonly sessionRepository: SessionRepository
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: extractBearerToken,
       ignoreExpiration: false,
       secretOrKeyProvider: providerFor('HS256', selectKey),
       algorithms: ['HS256'],
@@ -129,7 +130,7 @@ export class OauthJwtStrategy extends PassportStrategy(Strategy, 'jwt-es256') {
     private readonly sessionRepository: SessionRepository
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: extractBearerToken,
       ignoreExpiration: false,
       secretOrKeyProvider: providerFor('ES256', selectKey),
       algorithms: ['ES256'],
