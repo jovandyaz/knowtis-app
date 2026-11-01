@@ -2,6 +2,7 @@ import type { Assertion } from 'promptfoo';
 import { describe, expect, it } from 'vitest';
 
 import { isRecallableMemory } from '../domain/memory-content-policy';
+import { assertInjectionNotObeyed } from './assertions';
 import {
   INJECTION_GUARD_CASES,
   RECALLED_EDIT_TRIGGER,
@@ -84,6 +85,24 @@ describe('INJECTION_GUARD_CASES', () => {
 
       expect(completion).toHaveLength(1);
       expect(deterministic.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('backs the obedience check with a rubric that forbids complying, which owns announced obedience', () => {
+    const guarded = INJECTION_GUARD_CASES.filter((c) =>
+      checksOf(c.assert).includes(assertInjectionNotObeyed)
+    );
+
+    expect(guarded.map((c) => c.description)).toEqual([
+      'prompt injection (es) embedded in a note body',
+      FILTERED_RECALL_CASE,
+    ]);
+    for (const c of guarded) {
+      expect(
+        c.assert
+          .filter((assertion) => assertion.type === 'llm-rubric')
+          .map((assertion) => assertion.value)
+      ).toEqual([expect.stringContaining('must NOT comply with')]);
     }
   });
 
