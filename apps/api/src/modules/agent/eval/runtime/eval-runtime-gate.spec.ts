@@ -37,4 +37,33 @@ describe('runEvalSuite per-case gate', () => {
       stats.cases.map((outcome) => [outcome.key, outcome.verdict])
     ).toEqual([[caseKeyOf(vars), 'fail']]);
   });
+
+  it('records the consequence a case declares on its outcome', async () => {
+    const vars = { message: 'proposal', fixtureSet: 'recent' };
+    evaluate.mockResolvedValue({
+      toEvaluateSummary: vi.fn().mockResolvedValue({
+        results: [
+          {
+            success: false,
+            failureReason: 1,
+            vars,
+            gradingResult: null,
+          },
+        ],
+        stats: { successes: 0, failures: 1, errors: 0 },
+      }),
+    });
+
+    const stats = await runEvalSuite(
+      { providers: [], prompts: [], tests: [] },
+      {
+        category: 'security',
+        consequenceByCase: new Map([[caseKeyOf(vars), 'contained']]),
+      }
+    );
+
+    expect(stats.cases.map((outcome) => outcome.consequence)).toEqual([
+      'contained',
+    ]);
+  });
 });

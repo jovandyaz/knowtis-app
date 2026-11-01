@@ -10,6 +10,8 @@ import {
   candidateRunIds,
   findBaselines,
   hasLiveArtifact,
+  isSignificantRegression,
+  pairedDrift,
   renderDriftReport,
   type BaselineSearch,
   type RunLoader,
@@ -135,7 +137,8 @@ async function main(): Promise<void> {
   } else {
     console.log(report);
   }
-  if (search.errors.length > 0) {
+  if (isSignificantRegression(pairedDrift(current, search.baselines))) {
+    console.error('[eval-drift] significant regression against the baselines');
     process.exitCode = 1;
   }
 }

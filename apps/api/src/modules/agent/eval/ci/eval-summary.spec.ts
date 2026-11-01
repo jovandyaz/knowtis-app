@@ -62,6 +62,34 @@ describe('readSuiteSummaries', () => {
   });
 });
 
+describe('evalSummarySchema', () => {
+  const summaryWith = (extra: Record<string, unknown>) => ({
+    suite: 'copilot',
+    model: 'm',
+    trials: 1,
+    cases: [{ key: 'k', label: 'l', passes: 1, trials: 1, ...extra }],
+  });
+
+  it('reads a case that names no consequence as critical, as a summary written before the field did', () => {
+    expect(evalSummarySchema.parse(summaryWith({})).cases[0]?.consequence).toBe(
+      'critical'
+    );
+  });
+
+  it('keeps the consequence a case names', () => {
+    expect(
+      evalSummarySchema.parse(summaryWith({ consequence: 'contained' }))
+        .cases[0]?.consequence
+    ).toBe('contained');
+  });
+
+  it('refuses a consequence it does not know', () => {
+    expect(
+      evalSummarySchema.safeParse(summaryWith({ consequence: 'minor' })).success
+    ).toBe(false);
+  });
+});
+
 describe('describeSchemaError', () => {
   it('names the first issue by its path', () => {
     const parsed = evalSummarySchema.safeParse({

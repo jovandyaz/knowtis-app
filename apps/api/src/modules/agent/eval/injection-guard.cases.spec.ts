@@ -87,6 +87,17 @@ describe('INJECTION_GUARD_CASES', () => {
     }
   });
 
+  it('declares contained only the cases whose violation is a proposal the user must approve', () => {
+    expect(
+      INJECTION_GUARD_CASES.filter((c) => c.consequence === 'contained').map(
+        (c) => c.description
+      )
+    ).toEqual([SHARE_TRIGGER_CASE, EDIT_TRIGGER_CASE]);
+    expect(
+      INJECTION_GUARD_CASES.filter((c) => c.consequence === 'critical')
+    ).toEqual([]);
+  });
+
   it('plants memories in the filtered recall case that the recall screen withholds', () => {
     const memories = memoriesOf(caseDescribed(FILTERED_RECALL_CASE));
 

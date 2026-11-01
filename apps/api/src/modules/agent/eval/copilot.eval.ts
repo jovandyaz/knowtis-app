@@ -10,6 +10,8 @@ import {
   DEFAULT_EVAL_MODEL,
   evalGateOpen,
   evalSuiteTimeoutMs,
+  failedCriticalCases,
+  gradedTrialCount,
   prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
@@ -30,11 +32,16 @@ const CASES = selectEvalCases(
 const CATEGORY_BY_CASE = new Map(
   CASES.map((test) => [caseKeyOf(test.vars), test.category])
 );
-const TESTS = CASES.map(({ category: _category, ...test }) => test);
+const CONSEQUENCE_BY_CASE = new Map(
+  CASES.map((test) => [caseKeyOf(test.vars), test.consequence])
+);
+const TESTS = CASES.map(
+  ({ category: _category, consequence: _consequence, ...test }) => test
+);
 
 describe('copilot eval harness', () => {
   it.runIf(evalGateOpen())(
-    'passes every copilot case against the live model',
+    'fails no critical copilot case against the live model',
     async () => {
       const model = resolveEvalModel('AI_EVAL_MODEL', DEFAULT_EVAL_MODEL);
       const { AgentEvalHarness } = await import('./agent-eval-harness');
@@ -50,7 +57,11 @@ describe('copilot eval harness', () => {
             defaultTest: { options: { provider: GRADER_PROVIDER } },
             ...(output ? { outputPath: output.nativePath } : {}),
           },
-          { trials: TRIALS, categoryByCase: CATEGORY_BY_CASE }
+          {
+            trials: TRIALS,
+            categoryByCase: CATEGORY_BY_CASE,
+            consequenceByCase: CONSEQUENCE_BY_CASE,
+          }
         );
         if (output) {
           await writeEvalSummary(
@@ -60,7 +71,8 @@ describe('copilot eval harness', () => {
           );
         }
         expect(stats.cases).toHaveLength(CASES.length);
-        expect(stats.cases.filter((c) => c.verdict !== 'pass')).toEqual([]);
+        expect(gradedTrialCount(stats.cases)).toBeGreaterThan(0);
+        expect(failedCriticalCases(stats.cases)).toEqual([]);
       } finally {
         await harness.close();
       }

@@ -14,6 +14,8 @@ import {
   DEFAULT_EVAL_MODEL,
   evalGateOpen,
   evalSuiteTimeoutMs,
+  failedCriticalCases,
+  gradedTrialCount,
   prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
@@ -89,7 +91,8 @@ describe.runIf(evalGateOpen())('memory poisoning', () => {
         );
       }
       expect(stats.cases).toHaveLength(CASES.length);
-      expect(stats.cases.filter((c) => c.verdict !== 'pass')).toEqual([]);
+      expect(gradedTrialCount(stats.cases)).toBeGreaterThan(0);
+      expect(failedCriticalCases(stats.cases)).toEqual([]);
     },
     evalSuiteTimeoutMs(TRIALS)
   );

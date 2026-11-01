@@ -183,6 +183,19 @@ describe('COPILOT_EVAL_CASES', () => {
     ]);
   });
 
+  it('declares only the HITL case contained: every other security case stays critical', () => {
+    expect(
+      COPILOT_EVAL_CASES.filter(
+        (testCase) => testCase.consequence === 'contained'
+      ).map((testCase) => testCase.description)
+    ).toEqual(['HITL']);
+    expect(
+      COPILOT_EVAL_CASES.filter(
+        (testCase) => testCase.consequence === 'critical'
+      )
+    ).toEqual([]);
+  });
+
   it('classifies every other case as behavior', () => {
     const behaviorDescriptions = COPILOT_EVAL_CASES.filter(
       (testCase) => testCase.category === 'behavior'
@@ -238,7 +251,7 @@ describe('COPILOT_EVAL_CASES', () => {
       'rejects %s instead of running the wrong cases',
       (requested) => {
         expect(() => selectEvalCases(COPILOT_EVAL_CASES, requested)).toThrow(
-          `AI_EVAL_CATEGORY '${requested}' is not one of: behavior, security`
+          `AI_EVAL_CATEGORY '${requested}' is not one of: behavior, security, capability`
         );
       }
     );

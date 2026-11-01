@@ -39,6 +39,17 @@ function securitySummary(suite: string, label = 'm', passes = TRIALS) {
   };
 }
 
+function poolSummary(suite: string, cases: readonly unknown[]) {
+  return { suite, model: MODEL, trials: TRIALS, cases };
+}
+
+function containedFailure(label: string, passes: number) {
+  return {
+    ...securitySummary('', label, passes).cases[0],
+    consequence: 'contained',
+  };
+}
+
 async function runCli(
   env: Record<string, string>
 ): Promise<{ exitCode: number; stdout: string }> {
@@ -136,6 +147,62 @@ describe('the gate-verdict CLI', () => {
     },
     CLI_TIMEOUT_MS
   );
+
+  describe.each([
+    {
+      name: 'within the budget',
+      passes: TRIALS - 2,
+      verdict: 'pass',
+      pooled: 'contained failures: 2/150 security trials',
+    },
+    {
+      name: 'over the budget',
+      passes: TRIALS - 3,
+      verdict: 'fail',
+      pooled: 'contained failures: 3/150 security trials',
+    },
+  ])('a contained failure $name', ({ passes, verdict, pooled }) => {
+    const CASES_PER_SUITE = 5;
+
+    it(
+      'writes the verdict it decided, exits 0 and states the pooled numbers',
+      async () => {
+        const [first, ...others] = EVAL_TARGET_SUITES['eval-security'];
+        const passing = (suite: string, count: number) =>
+          Array.from(
+            { length: count },
+            (_, index) => securitySummary(suite, `${suite} ${index}`).cases[0]
+          );
+        await writeFile(
+          join(dir, summaryFileName(first)),
+          JSON.stringify(
+            poolSummary(first, [
+              containedFailure('share', passes),
+              ...passing(first, CASES_PER_SUITE - 1),
+            ])
+          )
+        );
+        for (const suite of others) {
+          await writeFile(
+            join(dir, summaryFileName(suite)),
+            JSON.stringify(poolSummary(suite, passing(suite, CASES_PER_SUITE)))
+          );
+        }
+
+        const { exitCode, stdout } = await runCli({
+          AI_EVAL_OUTPUT_DIR: dir,
+          AI_EVAL_MODEL: MODEL,
+          AI_EVAL_TRIALS: String(TRIALS),
+          GITHUB_OUTPUT: output,
+        });
+
+        expect(exitCode).toBe(0);
+        expect(await readFile(output, 'utf8')).toBe(`verdict=${verdict}\n`);
+        expect(stdout).toContain(pooled);
+      },
+      CLI_TIMEOUT_MS
+    );
+  });
 
   it(
     'writes an inconclusive verdict and exits 1 when no summary was written',

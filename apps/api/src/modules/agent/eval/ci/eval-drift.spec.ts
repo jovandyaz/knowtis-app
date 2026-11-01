@@ -2,10 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   candidateRunIds,
+  DRIFT_SIGNIFICANCE_ALPHA,
   escapeMarkdown,
   findBaselines,
   hasLiveArtifact,
   isCompleteSummary,
+  isSignificantRegression,
+  mcnemarExactP,
+  pairedDrift,
   renderDriftReport,
   type Baseline,
 } from './eval-drift';
@@ -38,6 +42,7 @@ function evalCase({
     key: JSON.stringify({ message: label }),
     label,
     category,
+    consequence: 'critical' as const,
     verdict,
     passes,
     graderErrors,
@@ -230,6 +235,179 @@ describe('escapeMarkdown', () => {
   });
 });
 
+describe('mcnemarExactP', () => {
+  it.each([
+    { b: 0, c: 0, p: 1 },
+    { b: 1, c: 0, p: 1 },
+    { b: 5, c: 0, p: 0.0625 },
+    { b: 6, c: 0, p: 0.03125 },
+    { b: 0, c: 6, p: 0.03125 },
+    { b: 7, c: 1, p: 0.0703125 },
+    { b: 8, c: 1, p: 0.0390625 },
+    { b: 3, c: 3, p: 1 },
+  ])('answers $p for b=$b, c=$c', ({ b, c, p }) => {
+    expect(mcnemarExactP(b, c)).toBeCloseTo(p, 10);
+  });
+});
+
+describe('isSignificantRegression', () => {
+  const drift = (regressed: number, recovered: number) => ({
+    pairs: regressed + recovered,
+    regressed,
+    recovered,
+    pValue: mcnemarExactP(regressed, recovered),
+  });
+
+  it('holds at the significance level the policy names', () => {
+    expect(DRIFT_SIGNIFICANCE_ALPHA).toBe(0.05);
+  });
+
+  it.each([
+    { b: 6, c: 0, significant: true },
+    { b: 8, c: 1, significant: true },
+    { b: 5, c: 0, significant: false },
+    { b: 7, c: 1, significant: false },
+    { b: 0, c: 6, significant: false },
+    { b: 0, c: 0, significant: false },
+  ])('is $significant for b=$b, c=$c', ({ b, c, significant }) => {
+    expect(isSignificantRegression(drift(b, c))).toBe(significant);
+  });
+});
+
+describe('pairedDrift', () => {
+  const pass = (label: string) => evalCase({ label, passes: 3 });
+  const fail = (label: string) =>
+    evalCase({ label, passes: 0, verdict: 'fail' });
+  const blind = (label: string) =>
+    evalCase({
+      label,
+      passes: 0,
+      graderErrors: 3,
+      verdict: 'inconclusive',
+    });
+
+  it('counts each verdict that flipped against its baseline, across suites', () => {
+    const drift = pairedDrift(
+      new Map([
+        [
+          'copilot',
+          read(
+            summary('copilot', [fail('worse'), pass('better'), pass('same')])
+          ),
+        ],
+        ['transcript-replay', read(summary('transcript-replay', [fail('r')]))],
+      ]),
+      new Map([
+        [
+          'copilot',
+          baseline(
+            '7',
+            summary('copilot', [pass('worse'), fail('better'), pass('same')])
+          ),
+        ],
+        [
+          'transcript-replay',
+          baseline('8', summary('transcript-replay', [pass('r')])),
+        ],
+      ])
+    );
+
+    expect(drift).toEqual({
+      pairs: 4,
+      regressed: 2,
+      recovered: 1,
+      pValue: 1,
+    });
+  });
+
+  it('pairs only the cases in both runs that graded trials in both', () => {
+    const drift = pairedDrift(
+      new Map([
+        [
+          'copilot',
+          read(
+            summary('copilot', [fail('kept'), fail('new'), blind('ungraded')])
+          ),
+        ],
+      ]),
+      new Map([
+        [
+          'copilot',
+          baseline(
+            '7',
+            summary('copilot', [
+              pass('kept'),
+              pass('dropped'),
+              pass('ungraded'),
+            ])
+          ),
+        ],
+      ])
+    );
+
+    expect(drift).toMatchObject({ pairs: 1, regressed: 1, recovered: 0 });
+  });
+
+  it('counts no flip for a case with no verdict', () => {
+    const { verdict: _verdict, ...legacy } = pass('legacy');
+    const drift = pairedDrift(
+      new Map([['copilot', read(summary('copilot', [fail('legacy')]))]]),
+      new Map([
+        [
+          'copilot',
+          {
+            runId: '7',
+            summary: { ...summary('copilot', []), cases: [legacy] },
+          },
+        ],
+      ])
+    );
+
+    expect(drift).toMatchObject({ regressed: 0, recovered: 0 });
+  });
+
+  it.each([
+    ['another model', { model: 'anthropic:x' }],
+    ['another trial count', { trials: 10 }],
+  ])('compares nothing with a baseline of %s', (_name, overrides) => {
+    const drift = pairedDrift(
+      new Map([['copilot', read(summary('copilot', [fail('a')]))]]),
+      new Map([
+        ['copilot', baseline('7', summary('copilot', [pass('a')], overrides))],
+      ])
+    );
+
+    expect(drift).toEqual({
+      pairs: 0,
+      regressed: 0,
+      recovered: 0,
+      pValue: 1,
+    });
+  });
+
+  it.each<[string, SummaryRead]>([
+    ['missing', { status: 'missing' }],
+    ['unreadable', { status: 'unreadable', reason: 'x' }],
+    ['malformed', read({ suite: 'copilot' })],
+  ])('compares nothing for a %s current summary', (_name, current) => {
+    expect(
+      pairedDrift(
+        new Map([['copilot', current]]),
+        new Map([['copilot', baseline('7', summary('copilot', [pass('a')]))]])
+      ).pairs
+    ).toBe(0);
+  });
+
+  it('compares nothing without a baseline', () => {
+    expect(
+      pairedDrift(
+        new Map([['copilot', read(summary('copilot', [fail('a')]))]]),
+        new Map()
+      ).pairs
+    ).toBe(0);
+  });
+});
+
 describe('renderDriftReport', () => {
   const base = summary('copilot', [
     evalCase({ label: 'steady', passes: 3 }),
@@ -306,6 +484,58 @@ describe('renderDriftReport', () => {
         '| guarded | 2/2 | 2/2 | 1/3 | INCONCLUSIVE | = |',
         '| answered | 2/3 | 2/3 | 0/3 | PASS | = |',
       ])
+    );
+  });
+
+  it('reports the paired verdict flips with their exact McNemar p', () => {
+    expect(report()).toContain(
+      'Paired verdicts: 1 pass -> fail, 1 fail -> pass over 3 cases, exact McNemar p = 1.000.'
+    );
+  });
+
+  it('names a significant regression', () => {
+    const labels = ['a', 'b', 'c', 'd', 'e', 'f'];
+    const shown = report({
+      current: new Map([
+        [
+          'copilot',
+          read(
+            summary(
+              'copilot',
+              labels.map((label) =>
+                evalCase({ label, passes: 0, verdict: 'fail' })
+              )
+            )
+          ),
+        ],
+      ]),
+      baselines: new Map([
+        [
+          'copilot',
+          baseline(
+            '77',
+            summary(
+              'copilot',
+              labels.map((label) => evalCase({ label, passes: 3 }))
+            )
+          ),
+        ],
+      ]),
+    });
+
+    expect(shown).toContain(
+      'Paired verdicts: 6 pass -> fail, 0 fail -> pass over 6 cases, exact McNemar p = 0.031.'
+    );
+    expect(shown).toContain('Significant regression: this leg fails.');
+  });
+
+  it('never names a regression it did not find', () => {
+    expect(report()).not.toContain('Significant regression');
+  });
+
+  it('says when no case could be paired', () => {
+    expect(report({ baselines: new Map() })).toContain(
+      'Paired verdicts: no case pairs with a baseline.'
     );
   });
 
