@@ -9,8 +9,7 @@ const CONDITION_OPENERS =
   'when|whenever|if|every time|each time|once|after|cuando|si|siempre que|cada vez que';
 
 const CLAUSE_START = '(?:^|[.;!?]\\s*)\\s*';
-const NOTE_TARGET =
-  '(?:\\s+(?:it|them|la|lo|las|los)\\b|[^.;]*\\b(?:notes?|notas?)\\b)';
+const NOTE_TARGET = '(?:\\s+(?:it|them)\\b|[^.;]*\\b(?:notes?|notas?)\\b)';
 
 const NOTE_INSTRUCTION_PATTERNS: readonly RegExp[] = [
   new RegExp(

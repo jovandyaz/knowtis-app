@@ -115,6 +115,8 @@ describe('isStorableMemory', () => {
     'Cuando viaja, envía postales a su familia',
     'Takes notes by hand',
     'Allows comments on their notes',
+    'Siempre escribe los correos en inglés',
+    'Cuando viaja, escribe lo que piensa en un diario',
     'If the note is in Spanish, write the reply in Spanish',
     'When summarizing notes, write in bullet points',
     'Cuando resuma notas, escribe en viñetas',
