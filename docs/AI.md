@@ -1,5 +1,48 @@
 # AI Module
 
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [Actions, Languages, and Tones](#actions-languages-and-tones)
+4. [Request Flow](#request-flow)
+5. [WebSocket Protocol](#websocket-protocol)
+6. [Rate Limiting](#rate-limiting)
+7. [Daily Message Quota](#daily-message-quota)
+8. [Response Caching](#response-caching)
+9. [Prompt Injection Defense](#prompt-injection-defense)
+10. [RPM Rate Limiting](#rpm-rate-limiting)
+11. [Shutdown Drain](#shutdown-drain)
+12. [Dynamic Model Configuration](#dynamic-model-configuration)
+13. [Vercel AI Gateway](#vercel-ai-gateway)
+14. [System Provider Keys (database overrides env)](#system-provider-keys-database-overrides-env)
+15. [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)
+16. [OpenRouter Upstream Allowlist](#openrouter-upstream-allowlist)
+17. [Model Catalog & Pricing](#model-catalog--pricing)
+18. [Open-Tier Model Catalog](#open-tier-model-catalog)
+19. [Copilot Model Selection](#copilot-model-selection)
+20. [Health & Alerting](#health--alerting)
+21. [Telemetry (Langfuse)](#telemetry-langfuse)
+22. [Anthropic Prompt Caching](#anthropic-prompt-caching)
+23. [Environment Variables](#environment-variables)
+24. [Database Schema](#database-schema)
+25. [Frontend Integration](#frontend-integration)
+26. [Structured Output](#structured-output)
+27. [Artifact Generation](#artifact-generation)
+28. [Voice Notes](#voice-notes)
+29. [REST API](#rest-api)
+30. [Adding a New Action](#adding-a-new-action)
+31. [Copilot Eval Harness](#copilot-eval-harness)
+32. [Hybrid Retrieval (A3)](#hybrid-retrieval-a3)
+33. [Web search (A4)](#web-search-a4)
+34. [Conversation memory (A6a)](#conversation-memory-a6a)
+35. [Long-term user memory (A6b)](#long-term-user-memory-a6b)
+36. [Bring-your-own-key (BYOK)](#bring-your-own-key-byok)
+
+New here? Start with the [one-page overview](./AI_OVERVIEW.md).
+
+---
+
 ## Overview
 
 AI text assistant integrated into the Tiptap editor. Supports streaming responses over WebSocket and non-streaming over REST. Gated by the `ai_enabled` DB feature flag (managed via `feature_flags` table).
@@ -1688,8 +1731,8 @@ other (`concurrency: model-gate`).
   `detail`, so a failure stores the default and the run link carries the evidence.
 
 - **Failures are sticky; inconclusive runs retry the next day.** A posted failure stores
-  `failed`: `/pending` stops listing the candidate and the sync never pends the same id again
-  (see **Fail** below), which is why only a decided failure is posted. Anything short of one —
+  `failed`: `/pending` stops listing the candidate and the sync does not pend that id again while
+  the selector keeps resolving to it (see **Fail** below), which is why only a decided failure is posted. Anything short of one —
   the key check, the install or the migrations failing before the eval, a vitest crash or
   timeout that leaves a summary unwritten, a grader outage, a provider error — leaves the
   candidate `pending`, so the next daily run evaluates it again, and the red job is the

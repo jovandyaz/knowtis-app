@@ -78,12 +78,17 @@ Dependency direction is enforced with Nx module boundaries: `app → ui / data-a
 
 ## Documentation
 
-- [Local setup](docs/LOCAL_SETUP.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [AI module and copilot](docs/AI.md)
-- [MCP server](docs/MCP.md)
-- [Authentication](docs/AUTH.md) and [permissions](docs/PERMISSIONS.md)
-- [Deployment](docs/DEPLOYMENT.md) on Railway and Vercel
+| Topic                        | Start here                                                                                                                                            |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Run it locally               | [Local setup](docs/LOCAL_SETUP.md)                                                                                                                    |
+| How the system fits together | [Architecture](docs/ARCHITECTURE.md)                                                                                                                  |
+| AI and the copilot           | [One-page overview](docs/AI_OVERVIEW.md), then the [full reference](docs/AI.md)                                                                       |
+| Decisions                    | [Own the AI routing layer](docs/adr/0001-own-the-ai-routing-layer.md)                                                                                 |
+| External AI clients          | [MCP server](docs/MCP.md)                                                                                                                             |
+| Sign-in and access           | [Authentication](docs/AUTH.md), [permissions](docs/PERMISSIONS.md)                                                                                    |
+| Sharing                      | [Access protocol](docs/SHARING_ACCESS_PROTOCOL.md), [people access contract](docs/PEOPLE_ACCESS_CONTRACT.md), [end-to-end tests](docs/SHARING_E2E.md) |
+| Shipping                     | [Deployment](docs/DEPLOYMENT.md), [database migrations](docs/MIGRATIONS.md)                                                                           |
+| Product analytics            | [PostHog](docs/POSTHOG_ANALYTICS.md)                                                                                                                  |
 
 ## Contributing
 
