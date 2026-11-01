@@ -146,7 +146,8 @@ jobs:
       - name: Apply migrations
         run: npx nx db:migrate:run api
 
-      - name: Run AI evals
+      - id: eval
+        name: Run AI evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
@@ -157,9 +158,23 @@ jobs:
           EVAL_TARGET: ${{ matrix.target }}
         run: npx nx run "api:$EVAL_TARGET"
 
+      # The verdict CLI exits 1 on inconclusive, which keeps a model gate run red; a weekly leg is red only on a decided fail or a crash.
+      - id: verdict
+        name: Decide the security verdict from the suite summaries
+        if: ${{ !cancelled() && matrix.target == 'eval-security' && (steps.eval.outcome == 'success' || steps.eval.outcome == 'failure') }}
+        continue-on-error: true
+        run: npx nx run api:eval-gate-verdict
+
+      - name: Warn on an inconclusive security verdict
+        if: ${{ !cancelled() && steps.verdict.outputs.verdict == 'inconclusive' }}
+        run: echo "::warning::The security verdict is inconclusive, so this leg stays green without a full judgment. Read the verdict step and the summaries."
+
+      - name: Fail the leg on a failed or crashed security verdict
+        if: ${{ !cancelled() && (steps.verdict.outputs.verdict == 'fail' || (steps.verdict.outcome == 'failure' && steps.verdict.outputs.verdict == '')) }}
+        run: exit 1
+
       - name: Compare against earlier runs
         if: always()
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           EVAL_DRIFT_ARTIFACT_NAME: eval-results-${{ matrix.leg }}

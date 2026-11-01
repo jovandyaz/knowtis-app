@@ -26,8 +26,29 @@ const NO_TESTS_FAIL_RE = /^ +passWithNoTests: false,$/m;
 const EVAL_DIR = join(REPO_ROOT, 'apps/api/src/modules/agent/eval');
 const SUMMARY_WRITER_RE = /prepareEvalOutput\('([\w-]+)'\)/g;
 const DRIFT_STEP_RE =
-  /^ +- name: Compare against earlier runs\n +if: always\(\)\n +continue-on-error: true\n +env:\n +GH_TOKEN: \$\{\{ github\.token \}\}\n +EVAL_DRIFT_ARTIFACT_NAME: (.+)\n +EVAL_TARGET: \$\{\{ matrix\.target \}\}\n +run: npx nx run api:eval-drift$/m;
+  /^ +- name: Compare against earlier runs\n +if: always\(\)\n +env:\n +GH_TOKEN: \$\{\{ github\.token \}\}\n +EVAL_DRIFT_ARTIFACT_NAME: (.+)\n +EVAL_TARGET: \$\{\{ matrix\.target \}\}\n +run: npx nx run api:eval-drift$/m;
 const UPLOAD_NAME_RE = /^ +name: (eval-results-.+)$/m;
+const UPLOAD_ALWAYS_RE = /^ +- name: Upload eval results\n +if: always\(\)$/m;
+const EVAL_STEP_RE = /^ +- id: eval\n +name: Run AI evals$/m;
+const VERDICT_STEP_RE =
+  /^ +- id: verdict\n +name: .+\n +if: \$\{\{ !cancelled\(\) && matrix\.target == 'eval-security' && \(steps\.eval\.outcome == 'success' \|\| steps\.eval\.outcome == 'failure'\) \}\}\n +continue-on-error: true\n +run: npx nx run api:eval-gate-verdict$/m;
+const RED_ON_FAIL_OR_CRASH_STEP_RE =
+  /^ +- name: .+\n +if: \$\{\{ !cancelled\(\) && \(steps\.verdict\.outputs\.verdict == 'fail' \|\| \(steps\.verdict\.outcome == 'failure' && steps\.verdict\.outputs\.verdict == ''\)\) \}\}\n +run: exit 1$/m;
+const WARN_ON_INCONCLUSIVE_STEP_RE =
+  /^ +- name: .+\n +if: \$\{\{ !cancelled\(\) && steps\.verdict\.outputs\.verdict == 'inconclusive' \}\}\n +run: echo "::warning::.+"$/m;
+const STEP_ORDER = [
+  'Run AI evals',
+  'id: verdict',
+  'steps.verdict.outputs.verdict',
+  'Compare against earlier runs',
+  'Upload eval results',
+];
+const FAILED_CRITICAL_ASSERTION =
+  'expect(failedCriticalCases(stats.cases)).toEqual([]);';
+const ANY_NON_PASS_ASSERTION = "c.verdict !== 'pass'";
+const GRADED_SOMETHING_ASSERTION =
+  'expect(gradedTrialCount(stats.cases)).toBeGreaterThan(0);';
+const SUITES_DECLARING_CONSEQUENCES = ['copilot', 'injection-guard'];
 const LEG_TARGET_RE = /^ +target: (\S+)$/gm;
 const SECURITY_TARGET_CATEGORY_RE =
   /"eval-security": \{[^}]*?"env": \{ "AI_EVAL_CATEGORY": "(\w+)" \}/s;
@@ -190,6 +211,44 @@ describe('weekly eval workflow', () => {
       .sort();
 
     expect(writers).toStrictEqual([...EVAL_TARGET_SUITES.eval].sort());
+  });
+
+  it.each(Object.values(EVAL_TARGET_SUITES).flat())(
+    'turns the %s suite red only on a failed critical case or a run that graded nothing',
+    (suite) => {
+      const source = readFileSync(join(EVAL_DIR, `${suite}.eval.ts`), 'utf8');
+
+      expect(source).toContain(FAILED_CRITICAL_ASSERTION);
+      expect(source).toContain(GRADED_SOMETHING_ASSERTION);
+      expect(source).not.toContain(ANY_NON_PASS_ASSERTION);
+    }
+  );
+
+  it.each(SUITES_DECLARING_CONSEQUENCES)(
+    'hands the %s suite its declared consequences',
+    (suite) => {
+      expect(
+        readFileSync(join(EVAL_DIR, `${suite}.eval.ts`), 'utf8')
+      ).toContain('consequenceByCase:');
+    }
+  );
+
+  it('applies the contained budget to the security legs, red only on a decided fail or a crashed verdict', () => {
+    expect(WORKFLOW).toMatch(EVAL_STEP_RE);
+    expect(WORKFLOW).toMatch(VERDICT_STEP_RE);
+    expect(WORKFLOW).toMatch(RED_ON_FAIL_OR_CRASH_STEP_RE);
+  });
+
+  it('warns on an inconclusive security verdict without failing the leg', () => {
+    expect(WORKFLOW).toMatch(WARN_ON_INCONCLUSIVE_STEP_RE);
+  });
+
+  it('runs the verdict before the drift comparison, and uploads whatever went red before it', () => {
+    const positions = STEP_ORDER.map((step) => WORKFLOW.indexOf(step));
+
+    expect(positions).not.toContain(-1);
+    expect(positions).toStrictEqual([...positions].sort((a, b) => a - b));
+    expect(WORKFLOW).toMatch(UPLOAD_ALWAYS_RE);
   });
 
   it("compares each leg with earlier main runs of the artifact it uploads, per its target's suites", () => {

@@ -12,17 +12,22 @@ import {
   EVAL_TIMEOUT_PER_TRIAL_MS,
   evalGateOpen,
   evalSuiteTimeoutMs,
+  failedCriticalCases,
   formatCaseOutcome,
+  gradedTrialCount,
   prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
+  selectEvalCases,
   summarizeTrials,
   toTrialResult,
   turnCompletionCheck,
   ungradedTrials,
   writeEvalSummary,
   type CaseVerdict,
+  type EvalCaseOutcome,
   type EvalRunStats,
+  type EvalTrialResult,
   type TrialOutcome,
 } from './eval-runtime';
 
@@ -278,6 +283,81 @@ describe('summarizeTrials', () => {
     ]);
   });
 
+  it('gives a security case the consequence it declares, and critical when it declares none', () => {
+    const declared = vars('declared');
+    const silent = vars('silent');
+
+    const cases = summarizeTrials(
+      [
+        { outcome: 'fail', vars: declared },
+        { outcome: 'pass', vars: silent },
+      ],
+      'security',
+      new Map(),
+      new Map([[caseKeyOf(declared), 'contained']])
+    );
+
+    expect(cases.map((c) => [c.label, c.consequence])).toEqual([
+      ['declared', 'contained'],
+      ['silent', 'critical'],
+    ]);
+  });
+
+  it('keeps a contained case with a failed trial a failed case', () => {
+    const contained = vars('contained');
+
+    const [outcome] = summarizeTrials(
+      [
+        { outcome: 'pass', vars: contained },
+        { outcome: 'fail', vars: contained },
+      ],
+      'security',
+      new Map(),
+      new Map([[caseKeyOf(contained), 'contained']])
+    );
+
+    expect(outcome?.verdict).toBe('fail');
+  });
+
+  it('gives a case outside security no consequence, even one declared for it', () => {
+    const behavior = vars('behavior');
+
+    const [outcome] = summarizeTrials(
+      [{ outcome: 'pass', vars: behavior }],
+      'behavior',
+      new Map(),
+      new Map([[caseKeyOf(behavior), 'contained']])
+    );
+
+    expect(outcome).not.toHaveProperty('consequence');
+  });
+
+  it('never fails a capability case, whatever it passed', () => {
+    const [outcome] = summarizeTrials(
+      [
+        trial('quote', 'fail'),
+        trial('quote', 'fail'),
+        trial('quote', 'graderError'),
+      ],
+      'capability'
+    );
+
+    expect(outcome).toMatchObject({
+      category: 'capability',
+      verdict: 'pass',
+      passes: 0,
+    });
+  });
+
+  it('reads a stalled capability trial as a failed answer, since answering is the capability', () => {
+    const [outcome] = summarizeTrials(
+      [trial('quote', 'pass'), trial('quote', 'turnError')],
+      'capability'
+    );
+
+    expect(outcome && ungradedTrials(outcome)).toBe(0);
+  });
+
   it('labels a case by its message, else by its key', () => {
     const cases = summarizeTrials([
       { outcome: 'pass', vars: { id: 'safe-tool' } },
@@ -340,6 +420,111 @@ describe('summarizeTrials', () => {
       outputTokens: 20,
       costUsd: null,
     });
+  });
+});
+
+describe('failedCriticalCases', () => {
+  const outcome = (
+    label: string,
+    overrides: Partial<EvalCaseOutcome>
+  ): EvalCaseOutcome => ({
+    key: label,
+    label,
+    category: 'security',
+    verdict: 'fail',
+    passes: 9,
+    graderErrors: 0,
+    errors: 0,
+    turnErrors: 0,
+    trials: 10,
+    inputTokens: 0,
+    outputTokens: 0,
+    costUsd: null,
+    ...overrides,
+  });
+
+  it('holds only the failed security cases a later barrier would not stop', () => {
+    const critical = outcome('critical', { consequence: 'critical' });
+
+    expect(
+      failedCriticalCases([
+        critical,
+        outcome('contained', { consequence: 'contained' }),
+        outcome('behavior', { category: 'behavior' }),
+        outcome('capability', { category: 'capability' }),
+        outcome('passed', { consequence: 'critical', verdict: 'pass' }),
+        outcome('inconclusive', {
+          consequence: 'critical',
+          verdict: 'inconclusive',
+        }),
+      ])
+    ).toEqual([critical]);
+  });
+
+  it('counts a failed security case without a consequence as critical', () => {
+    const undeclared = outcome('undeclared', {});
+
+    expect(failedCriticalCases([undeclared])).toEqual([undeclared]);
+  });
+});
+
+describe('gradedTrialCount', () => {
+  const trials = (
+    message: string,
+    outcomes: readonly TrialOutcome[]
+  ): EvalTrialResult[] =>
+    outcomes.map((outcome) => ({ outcome, vars: { message } }));
+
+  it('counts the trials that carry a verdict, over every case', () => {
+    const cases = summarizeTrials(
+      [
+        ...trials('a', ['pass', 'fail', 'graderError']),
+        ...trials('b', ['pass', 'error', 'turnError']),
+      ],
+      'security'
+    );
+
+    expect(gradedTrialCount(cases)).toBe(3);
+  });
+
+  it.each(['graderError', 'error', 'turnError'] as const)(
+    'is 0 when every security trial ended as %s',
+    (outcome) => {
+      const cases = summarizeTrials(
+        [...trials('a', [outcome, outcome]), ...trials('b', [outcome])],
+        'security'
+      );
+
+      expect(gradedTrialCount(cases)).toBe(0);
+    }
+  );
+
+  it('counts a stalled behavior trial, which is a failed answer, and no errored one', () => {
+    expect(
+      gradedTrialCount(summarizeTrials(trials('a', ['turnError', 'error'])))
+    ).toBe(1);
+  });
+
+  it('is 0 without a case', () => {
+    expect(gradedTrialCount([])).toBe(0);
+  });
+});
+
+describe('selectEvalCases', () => {
+  const CASES = [
+    { name: 'a', category: 'behavior' },
+    { name: 'b', category: 'security' },
+    { name: 'c', category: 'capability' },
+  ] as const;
+
+  it.each([
+    ['security', 'b'],
+    ['behavior', 'a'],
+    ['capability', 'c'],
+  ])('keeps only the %s cases', (requested, name) => {
+    expect(selectEvalCases(CASES, requested).map((c) => c.name)).toEqual([
+      name,
+    ]);
   });
 });
 

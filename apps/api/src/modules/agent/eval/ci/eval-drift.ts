@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ungradedTrials } from '../runtime/eval-runtime';
+import { ungradedTrials, type CaseVerdict } from '../runtime/eval-runtime';
 import { messageOf } from './cli-env';
 import {
   describeSchemaError,
@@ -41,6 +41,12 @@ const runListSchema = z.array(z.object({ databaseId: z.int() }));
 const artifactListingSchema = z.object({
   artifacts: z.array(z.object({ name: z.string(), expired: z.boolean() })),
 });
+
+/** The two-sided p-value below which a paired verdict regression is not read as variance. */
+export const DRIFT_SIGNIFICANCE_ALPHA = 0.05;
+
+const BINOMIAL_NULL_PROBABILITY = 0.5;
+const P_VALUE_DIGITS = 3;
 
 const MARKDOWN_SPECIAL = /[\\`*_[\]<>|#~]/g;
 const LINE_BREAK = /\r?\n/g;
@@ -190,6 +196,97 @@ function caseRow(
   return `| ${cells.join(' | ')} |`;
 }
 
+function isComparable(previous: EvalSummary, current: EvalSummary): boolean {
+  return previous.model === current.model && previous.trials === current.trials;
+}
+
+/** The exact two-sided McNemar test: the binomial tail of the rarer flip over `b + c` discordant pairs at 0.5, doubled and capped at 1. */
+export function mcnemarExactP(b: number, c: number): number {
+  const discordant = b + c;
+  let term = BINOMIAL_NULL_PROBABILITY ** discordant;
+  let tail = 0;
+  for (let flips = 0; flips <= Math.min(b, c); flips += 1) {
+    tail += term;
+    term *= (discordant - flips) / (flips + 1);
+  }
+  return Math.min(1, 2 * tail);
+}
+
+/** This run against its baselines, pooled over every suite that has a comparable one. */
+export interface PairedDrift {
+  /** Cases present in both runs with graded trials in both, and no turn that ended unanswered in this run: an outage is not a regression. */
+  readonly pairs: number;
+  /** `b`: pairs whose verdict went from pass to fail. */
+  readonly regressed: number;
+  /** `c`: pairs whose verdict went from fail to pass. */
+  readonly recovered: number;
+  readonly pValue: number;
+}
+
+function casePairs(
+  read: SummaryRead,
+  baseline: Baseline | undefined
+): (readonly [EvalSummaryCase, EvalSummaryCase])[] {
+  if (read.status !== SUMMARY_READ_STATUS.read || !baseline) {
+    return [];
+  }
+  const parsed = evalSummarySchema.safeParse(read.raw);
+  if (!parsed.success || !isComparable(baseline.summary, parsed.data)) {
+    return [];
+  }
+  const previousByKey = new Map(baseline.summary.cases.map((c) => [c.key, c]));
+  return parsed.data.cases.flatMap((current) => {
+    const previous = previousByKey.get(current.key);
+    return previous &&
+      gradedOf(previous) > 0 &&
+      gradedOf(current) > 0 &&
+      current.turnErrors === 0
+      ? [[previous, current] as const]
+      : [];
+  });
+}
+
+/** The paired comparison of `current` with `baselines`. A summary that cannot be read, has no baseline or an incomparable one adds no pair. */
+export function pairedDrift(
+  current: ReadonlyMap<string, SummaryRead>,
+  baselines: ReadonlyMap<string, Baseline>
+): PairedDrift {
+  const pairs = [...current].flatMap(([suite, read]) =>
+    casePairs(read, baselines.get(suite))
+  );
+  const flipped = (from: CaseVerdict, to: CaseVerdict) =>
+    pairs.filter(
+      ([previous, now]) => previous.verdict === from && now.verdict === to
+    ).length;
+  const regressed = flipped('pass', 'fail');
+  const recovered = flipped('fail', 'pass');
+  return {
+    pairs: pairs.length,
+    regressed,
+    recovered,
+    pValue: mcnemarExactP(regressed, recovered),
+  };
+}
+
+/** More verdicts regressed than recovered, beyond what chance explains. */
+export function isSignificantRegression(drift: PairedDrift): boolean {
+  return (
+    drift.regressed > drift.recovered && drift.pValue < DRIFT_SIGNIFICANCE_ALPHA
+  );
+}
+
+function pairedDriftLines(drift: PairedDrift): string[] {
+  if (drift.pairs === 0) {
+    return ['Paired verdicts: no case pairs with a baseline.'];
+  }
+  return [
+    `Paired verdicts: ${drift.regressed} pass -> fail, ${drift.recovered} fail -> pass over ${drift.pairs} cases, exact McNemar p = ${drift.pValue.toFixed(P_VALUE_DIGITS)}.`,
+    ...(isSignificantRegression(drift)
+      ? ['Significant regression: this leg fails.']
+      : []),
+  ];
+}
+
 function isMissing(read: SummaryRead | undefined): boolean {
   return (
     (read?.status ?? SUMMARY_READ_STATUS.missing) ===
@@ -225,7 +322,7 @@ function suiteSection(
     ];
   }
   const previous = baseline.summary;
-  if (previous.model !== current.model || previous.trials !== current.trials) {
+  if (!isComparable(previous, current)) {
     return [
       `### ${suite}: baseline run ${baseline.runId} is not comparable (model ${escapeMarkdown(previous.model)} -> ${escapeMarkdown(current.model)}, trials ${previous.trials} -> ${current.trials}).`,
     ];
@@ -245,7 +342,7 @@ function suiteSection(
   ];
 }
 
-/** The job-summary Markdown comparing each suite of this run with its baseline. Every interpolated label, model and reason is escaped. */
+/** The job-summary Markdown comparing each suite of this run with its baseline, then the paired verdict test over them. Every interpolated label, model and reason is escaped. */
 export function renderDriftReport(input: DriftReportInput): string {
   const { target, current, baselines, lookback, branch, errors } = input;
   const missing = EVAL_TARGET_SUITES[target].filter((suite) =>
@@ -275,5 +372,6 @@ export function renderDriftReport(input: DriftReportInput): string {
       blocks.push(section);
     }
   }
+  blocks.push(pairedDriftLines(pairedDrift(current, baselines)));
   return `${blocks.map((block) => block.join('\n')).join('\n\n')}\n`;
 }

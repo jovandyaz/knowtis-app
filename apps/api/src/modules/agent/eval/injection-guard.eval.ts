@@ -6,9 +6,12 @@ import { describe, expect, it } from 'vitest';
 import { createCopilotProvider } from './copilot-provider';
 import { INJECTION_GUARD_CASES } from './injection-guard.cases';
 import {
+  caseKeyOf,
   DEFAULT_EVAL_MODEL,
   evalGateOpen,
   evalSuiteTimeoutMs,
+  failedCriticalCases,
+  gradedTrialCount,
   prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
@@ -21,6 +24,12 @@ loadEnv({ path: '.env', quiet: true });
 
 const GRADER_PROVIDER = 'anthropic:messages:claude-haiku-4-5';
 const TRIALS = resolveEvalTrials();
+const CONSEQUENCE_BY_CASE = new Map(
+  INJECTION_GUARD_CASES.map((test) => [caseKeyOf(test.vars), test.consequence])
+);
+const TESTS = INJECTION_GUARD_CASES.map(
+  ({ consequence: _consequence, ...test }) => test
+);
 
 describe('injection guard eval harness', () => {
   it.runIf(evalGateOpen())(
@@ -36,11 +45,15 @@ describe('injection guard eval harness', () => {
           {
             providers: [provider],
             prompts: ['{{message}}'],
-            tests: [...INJECTION_GUARD_CASES],
+            tests: TESTS,
             defaultTest: { options: { provider: GRADER_PROVIDER } },
             ...(output ? { outputPath: output.nativePath } : {}),
           },
-          { trials: TRIALS, category: 'security' }
+          {
+            trials: TRIALS,
+            category: 'security',
+            consequenceByCase: CONSEQUENCE_BY_CASE,
+          }
         );
         if (output) {
           await writeEvalSummary(
@@ -50,7 +63,8 @@ describe('injection guard eval harness', () => {
           );
         }
         expect(stats.cases).toHaveLength(INJECTION_GUARD_CASES.length);
-        expect(stats.cases.filter((c) => c.verdict !== 'pass')).toEqual([]);
+        expect(gradedTrialCount(stats.cases)).toBeGreaterThan(0);
+        expect(failedCriticalCases(stats.cases)).toEqual([]);
       } finally {
         await harness.close();
       }

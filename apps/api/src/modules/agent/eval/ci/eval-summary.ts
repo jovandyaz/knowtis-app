@@ -5,7 +5,9 @@ import { z } from 'zod';
 
 import {
   CASE_VERDICTS,
+  DEFAULT_EVAL_CONSEQUENCE,
   EVAL_CATEGORIES,
+  EVAL_CONSEQUENCES,
   summaryFileName,
 } from '../runtime/eval-runtime';
 import { messageOf } from './cli-env';
@@ -26,6 +28,7 @@ const evalSummaryCaseSchema = z.object({
   key: z.string(),
   label: z.string(),
   category: z.enum(EVAL_CATEGORIES).optional(),
+  consequence: z.enum(EVAL_CONSEQUENCES).default(DEFAULT_EVAL_CONSEQUENCE),
   verdict: z.enum(CASE_VERDICTS).optional(),
   passes: z.int().nonnegative(),
   graderErrors: z.int().nonnegative().default(0),
@@ -34,7 +37,7 @@ const evalSummaryCaseSchema = z.object({
   trials: z.int().positive(),
 });
 
-/** A `<suite>.summary.json`. `category`, `verdict`, `errors` and `turnErrors` are absent from summaries written before verdicts existed. */
+/** A `<suite>.summary.json`. `category`, `verdict`, `errors` and `turnErrors` are absent from summaries written before verdicts existed; a case that names no `consequence` reads as critical. */
 export const evalSummarySchema = z.object({
   suite: z.string(),
   model: z.string(),

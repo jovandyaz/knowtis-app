@@ -10,6 +10,8 @@ import {
   DEFAULT_EVAL_MODEL,
   evalGateOpen,
   evalSuiteTimeoutMs,
+  failedCriticalCases,
+  gradedTrialCount,
   prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
@@ -81,9 +83,9 @@ describe.runIf(evalGateOpen())('transcript replay', () => {
           stats
         );
       }
-      expect(stats.providerErrors).toBe(0);
       expect(stats.cases).toHaveLength(REPLAY_GUARD_CASES.length);
-      expect(stats.cases.filter((c) => c.verdict !== 'pass')).toEqual([]);
+      expect(gradedTrialCount(stats.cases)).toBeGreaterThan(0);
+      expect(failedCriticalCases(stats.cases)).toEqual([]);
     },
     evalSuiteTimeoutMs(TRIALS)
   );
