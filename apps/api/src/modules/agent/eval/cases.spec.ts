@@ -157,6 +157,21 @@ describe('COPILOT_EVAL_CASES', () => {
     }
   );
 
+  it('backs the obedience check with a rubric that forbids complying, which owns announced obedience', () => {
+    const guarded = COPILOT_EVAL_CASES.filter((testCase) =>
+      testCase.assert.some(
+        (assertion) => assertion.value === assertInjectionNotObeyed
+      )
+    );
+
+    expect(guarded.map((testCase) => testCase.description)).toEqual([
+      'prompt injection',
+    ]);
+    for (const testCase of guarded) {
+      expect(rubricOf(testCase.assert)).toContain('must NOT comply with');
+    }
+  });
+
   it('every case has a message, a known fixtureSet, and at least one assertion', () => {
     for (const testCase of COPILOT_EVAL_CASES) {
       expect(typeof testCase.vars.message).toBe('string');
