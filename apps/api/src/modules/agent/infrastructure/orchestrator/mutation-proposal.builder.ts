@@ -249,7 +249,6 @@ export class MutationProposalBuilder {
       targetNoteId: noteId,
       payload: { targetEmail, permission },
       summary: `Share "${note.title}" with ${targetEmail} as ${permission}`,
-      baseVersion: note.updatedAt,
     });
   }
 }
