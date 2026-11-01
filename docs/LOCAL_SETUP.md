@@ -25,7 +25,7 @@ pnpm dev:mcp     # MCP server (:3334)
 
 | Requirement | Version  | Notes                                                                                                                                                  |
 | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Node.js     | **22.x** | `pnpm run setup` rejects older majors (`major < 22`). `nvm install 22 && nvm use 22`.                                                                  |
+| Node.js     | **24.x** | `pnpm run setup` rejects older majors (`major < 24`). `nvm install 24 && nvm use 24`.                                                                  |
 | pnpm        | ≥ 10.x   | Never use `npm`/`yarn` in this repo.                                                                                                                   |
 | Docker      | any      | **Docker Desktop must be running** before `pnpm run setup` — the script only checks `docker info` (no version check) and aborts if the daemon is down. |
 
@@ -148,7 +148,7 @@ See [MCP.md](./MCP.md) for the full protocol details (discovery, PKCE, scopes, e
 | ---------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `Docker is not running` on `pnpm run setup`          | Daemon down                                                                | Start Docker Desktop, re-run `pnpm run setup`.                                           |
 | `Can't resolve '../build/css/variables.css'` overlay | Tokens not built (very old checkout without the `serve` dependsOn)         | `pnpm nx build design-system`, then restart. On current `main` this is automatic.        |
-| `Node 22.x required`                                 | Wrong Node                                                                 | `nvm install 22 && nvm use 22`.                                                          |
+| `Node 24.x required`                                 | Wrong Node                                                                 | `nvm install 24 && nvm use 24`.                                                          |
 | "Your email address hasn't been verified yet" stays  | The code was never typed in (local dev only logs it)                       | Copy the 6-digit code from the API terminal into **Verify now**, or run the SQL above.   |
 | MCP OAuth discovery returns `404`                    | OAuth env (`MCP_OAUTH_ISSUER`/`MCP_RESOURCE_URL`, API's `OAUTH_*`) not set | Set the OAuth env vars (see above), or use the API-key path.                             |
 | `role "postgres" does not exist`                     | Wrong psql user                                                            | The local DB user is `knowtis`, not `postgres`.                                          |

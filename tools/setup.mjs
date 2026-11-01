@@ -23,11 +23,11 @@ function fail(message) {
   process.exit(1);
 }
 
-function ensureNode22() {
+function ensureNode24() {
   const major = Number.parseInt(process.versions.node.split('.')[0], 10);
-  if (Number.isNaN(major) || major < 22) {
+  if (Number.isNaN(major) || major < 24) {
     fail(
-      `Node 22.x required (you are on ${process.versions.node}). Install with: nvm install 22 && nvm use 22`
+      `Node 24.x required (you are on ${process.versions.node}). Install with: nvm install 24 && nvm use 24`
     );
   }
 }
@@ -82,7 +82,7 @@ function waitForPostgres() {
   );
 }
 
-ensureNode22();
+ensureNode24();
 ensureDocker();
 
 step('Scaffolding .env files');
