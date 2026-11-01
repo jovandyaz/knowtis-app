@@ -2862,16 +2862,109 @@ describe('AiSdkAgentOrchestrator', () => {
     );
   });
 
-  it('yields an error event without reopening the turn when a progressed continuation throws synchronously before streaming', async () => {
-    streamTextMock.mockClear();
+  function erroringContinuation(error: Error) {
     streamTextMock
       .mockImplementationOnce(
         toolCallStep({ inputTokens: 10, outputTokens: 5 })
       )
       .mockImplementationOnce(() => {
-        throw new Error('provider unroutable');
+        throw error;
       });
+  }
+
+  function modelIdsCalled(): string[] {
+    return streamTextMock.mock.calls.map(
+      (call) => (call[0].model as { modelId: string }).modelId
+    );
+  }
+
+  it('fails a continuation that errors before streaming over to the next candidate', async () => {
+    streamTextMock.mockClear();
+    erroringContinuation(new Error('provider unroutable'));
+    streamTextMock.mockImplementationOnce(failoverAnswer());
     const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const config = makeConfig();
+    const { registry, chain } = createTestChain(config, FALLBACK);
+    const recordFailure = vi.spyOn(chain.cooldown, 'recordFailure');
+    const orchestrator = new AiSdkAgentOrchestrator(
+      config,
+      makeToolRegistry(),
+      registry,
+      chain
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(modelIdsCalled()).toEqual([
+      'claude-sonnet-4-20250514',
+      'claude-sonnet-4-20250514',
+      'claude-haiku-4-5',
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: { model: FALLBACK },
+    });
+    expect(recordFailure).toHaveBeenCalledWith('anthropic');
+    expect(healthLogsFrom(logSpy).map((entry) => entry.outcome)).toEqual([
+      'continued',
+      'error',
+      'done',
+    ]);
+    expect(streamTextMock.mock.calls[2][0].messages).toEqual(
+      streamTextMock.mock.calls[1][0].messages
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.chain.step_failed',
+        atStep: 1,
+        reason: expect.stringContaining('provider unroutable'),
+      })
+    );
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('fails a continuation whose stream errors before any part over to the next candidate', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(() => ({
+        stream: (async function* () {
+          yield { type: 'error', error: new Error('stream refused') };
+        })(),
+        usage: rejectedUsage('stream refused'),
+        response: Promise.resolve({ messages: [] }),
+      }))
+      .mockImplementationOnce(failoverAnswer());
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      FALLBACK
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(modelIdsCalled().at(-1)).toBe('claude-haiku-4-5');
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+  });
+
+  it('ends the turn when a continuation errors after streaming parts', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(() => ({
+        stream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'half an answer' };
+          throw new Error('stream cut');
+        })(),
+        usage: Promise.resolve({ inputTokens: 0, outputTokens: 0 }),
+        response: Promise.resolve({ messages: [] }),
+      }));
     const orchestrator = makeOrchestrator(
       makeConfig(),
       makeToolRegistry(),
@@ -2881,23 +2974,87 @@ describe('AiSdkAgentOrchestrator', () => {
     const events = await collect(orchestrator.run(baseInput));
 
     expect(streamTextMock).toHaveBeenCalledTimes(2);
-    const models = streamTextMock.mock.calls.map(
-      (call) => (call[0].model as { modelId: string }).modelId
-    );
-    expect(models).toEqual([
-      'claude-sonnet-4-20250514',
-      'claude-sonnet-4-20250514',
-    ]);
     expect(events.at(-1)).toMatchObject({
       type: 'error',
       error: { code: 'AI_PROVIDER_ERROR' },
     });
-    const healthLogs = healthLogsFrom(logSpy);
-    expect(healthLogs.map((entry) => entry.outcome)).toEqual([
+  });
+
+  it('ends the turn when a continuation errors on the last candidate', async () => {
+    streamTextMock.mockClear();
+    erroringContinuation(new Error('provider unroutable'));
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator(makeConfig(), makeToolRegistry(), '');
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_PROVIDER_ERROR' },
+    });
+    expect(healthLogsFrom(logSpy).map((entry) => entry.outcome)).toEqual([
       'continued',
       'error',
     ]);
     logSpy.mockRestore();
+  });
+
+  it('does not advance the chain when a continuation is aborted', async () => {
+    streamTextMock.mockClear();
+    const aborted = new Error('aborted');
+    aborted.name = 'AbortError';
+    erroringContinuation(aborted);
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      FALLBACK
+    );
+
+    await collect(orchestrator.run(baseInput));
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not advance the chain when the turn is cancelled and the continuation errors', async () => {
+    streamTextMock.mockClear();
+    const controller = new AbortController();
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(() => {
+        controller.abort();
+        throw new Error('socket closed');
+      });
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      FALLBACK
+    );
+
+    await collect(
+      orchestrator.run({ ...baseInput, signal: controller.signal })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not fail an erroring BYOK continuation over to another model', async () => {
+    streamTextMock.mockClear();
+    erroringContinuation(new Error('provider unroutable'));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      FALLBACK
+    );
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events.at(-1)).toMatchObject({ type: 'error' });
   });
 
   it('attributes accumulated usage across models to the final answering model on the done event', async () => {
