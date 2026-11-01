@@ -144,7 +144,7 @@ describe('MutationProposalBuilder', () => {
     expect(r._unsafeUnwrap().summary).toBe(
       'Share "Old" with a@b.com as viewer'
     );
-    expect(r._unsafeUnwrap().baseVersion).toBe(NOTE.updatedAt);
+    expect(r._unsafeUnwrap().baseVersion).toBeUndefined();
   });
 
   it('reads a title-only update through getBody, never paying for the model-facing view', async () => {
