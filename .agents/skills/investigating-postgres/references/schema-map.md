@@ -15,7 +15,7 @@ Canonical source: `apps/api/src/database/schema/` in the Knowtis repository. Alw
 | `user-ai-settings.schema.ts` | Per-account model selection |
 | `user-provider-keys.schema.ts` | BYOK keys (AES-256-GCM encrypted — never decryptable via SQL) |
 | `ai-usage.schema.ts` | Per-turn usage/billing rows (`byok` flag marks user-billed turns) |
-| `feature-flags.schema.ts` | DB feature flags (`ai_enabled`, `agent_byok`, `agent_web_search`, …) |
+| `feature-flags.schema.ts` | DB feature flags (`ai_enabled`) |
 | `artifacts.schema.ts` | Generated artifacts |
 | `mcp-api-keys.schema.ts` | MCP API keys (hashed) |
 | `oauth-payloads.schema.ts` | OAuth/OIDC grants, sessions, interactions, and other provider payloads |

@@ -62,9 +62,6 @@ vitest.config.*.timestamp*
 !.github/CODEOWNERS
 !.github/FUNDING.yml
 
-# Agents
-AGENTS.md
-
 # Agent skills (symlinks for non-Claude agents)
 .agent/
 .trae/
