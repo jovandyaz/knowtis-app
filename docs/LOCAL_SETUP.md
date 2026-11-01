@@ -33,7 +33,7 @@ pnpm dev:mcp     # MCP server (:3334)
 
 Runs [`tools/setup.mjs`](../tools/setup.mjs) in order, aborting on the first failure:
 
-1. Assert Node major ≥ 22.
+1. Assert Node major ≥ 24.
 2. Assert the Docker daemon is up.
 3. Scaffold `.env` from `.env.example` for `apps/api`, `apps/notes`, `apps/mcp` — **idempotent**, never overwrites an existing `.env`.
 4. `pnpm install --prefer-frozen-lockfile`.
