@@ -400,6 +400,34 @@ export async function* runAgentStepLoop(
             );
             throw cause;
           }
+          const nextModel =
+            !isAbortError(cause) &&
+            !params.abortSignal.aborted &&
+            eligibleForStepFailover(
+              result.health.parts === 0,
+              completedSteps,
+              byok,
+              failoverCandidates
+            )
+              ? failoverCandidates.shift()
+              : undefined;
+          if (nextModel !== undefined) {
+            emitTurnHealth(
+              logger,
+              userId,
+              currentModel,
+              result.health,
+              AGENT_TURN_OUTCOME.ERROR,
+              result.callStartedAt,
+              modelsUsed
+            );
+            await failOverTo(
+              nextModel,
+              `continuation error: ${errorMessage(cause, byok)}`
+            );
+            failedOver = true;
+            break stepAttempts;
+          }
           if (fromStream) {
             logger.error({
               event: 'agent.run.error',
