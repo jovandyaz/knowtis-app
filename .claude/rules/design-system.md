@@ -3,64 +3,11 @@ paths:
   - 'packages/design-system/**'
 ---
 
-# Design System Rules
+# Design system
 
-## Component Structure
-
-- Use `forwardRef` for all components that render a DOM element.
-- The rule does not reach vendored shadcn primitives under `src/components/ui/`, which use React 19 ref-as-prop (`React.ComponentProps<…>` spread onto the primitive) so `pnpm ds:add --overwrite` can refresh them verbatim; nor a component whose outermost render is a third-party or Radix root that renders no DOM of its own (`Dialog` — the Root; its layout slots do forward refs — `RecordingModal`, `Toaster`) or another component (`LoadingButton`, `ThemeToggle`, `ModelSelect`, `ModelMenu`); nor a generic component, whose type parameter `forwardRef` erases (`SegmentedControl`, `RadioCardGroup`, `DataTable`).
-- Define variants with `class-variance-authority` (CVA):
-  ```typescript
-  const buttonVariants = cva('base-classes', {
-    variants: {
-      variant: { default: '...', destructive: '...' },
-      size: { default: '...', sm: '...' },
-    },
-    defaultVariants: { variant: 'default', size: 'default' },
-  });
-  ```
-- Merge classNames with `cn()` utility (clsx + tailwind-merge): `cn(buttonVariants({ variant, size }), className)`.
-- Export both the component and its variants type: `export { Button, buttonVariants }`.
-
-## Vendored shadcn primitives
-
-- **Reach for shadcn/ui before writing a primitive by hand.** Check [ui.shadcn.com](https://ui.shadcn.com/docs/components) first; if a primitive exists, vendor it with `pnpm ds:add` instead of reimplementing it. Write one by hand only when no shadcn primitive covers the behaviour, or when adopting one would mean disabling its core feature to fit our interaction model — say so in the PR when that is the reason.
-- `src/components/ui/` holds shadcn/ui primitives vendored through `pnpm ds:add`. They keep shadcn's kebab-case filenames and `data-slot` attributes; hand-written components stay PascalCase in `src/components/`.
-- Under `ui/`, hand-edit only the normalizations `pnpm ds:add` reports: replacing a stripped animation, and swapping hardcoded `duration-*` / `ease-*` for the motion tokens. Anything else is discarded by `--overwrite` — if a primitive needs design-system behaviour, wrap it in a PascalCase component instead.
-- Radix is imported from the unified `radix-ui` package, never from `@radix-ui/react-*` — two import surfaces produce two `DismissableLayer` registries and break nested overlays.
-
-## Design Tokens
-
-- Color system uses OKLCH colorspace defined in `tokens/colors.json`.
-- Semantic tokens map to CSS custom properties: `bg-(--background)`, `text-(--foreground)`, `border-(--border)`.
-- Never hardcode color values (hex, rgb, oklch) in components — always reference tokens via CSS custom properties.
-- Learn tones split fill from text: fills and rings use `learn-*` (`bg-learn-correct/15`, `ring-learn-incorrect/25`), text on a neutral or tinted surface uses `learn-*-text` (`text-learn-correct-text`) — the fill shades fail WCAG AA as text.
-- Never hardcode spacing values — use Tailwind spacing scale (`p-4`, `gap-2`, `mt-6`).
-
-## Motion
-
-- CSS-driven primitives animate with the token utilities — `duration-(--motion-duration-fast)`, `duration-(--motion-duration-base)`, `duration-(--motion-duration-slow)` and `ease-standard`/`ease-enter`/`ease-exit` — plus a `motion-reduce:` escape hatch (`motion-reduce:transition-none`).
-- Components animating through `motion/react` take every transition from `useMotionPreset()` — never a hand-written duration, easing or spring.
-- Never branch on `prefers-reduced-motion` by hand: `motion-reduce:` covers CSS and `useMotionPreset()` covers JS.
-
-## Accessibility (a11y)
-
-- Every interactive element must have an accessible name (visible label, `aria-label`, or `aria-labelledby`).
-- Keyboard navigation: all interactive elements must be focusable and operable via keyboard (Enter, Space, Escape, Arrow keys as appropriate).
-- Focus management: modals and dialogs must trap focus and restore it on close.
-- Use semantic HTML elements: `<button>` for actions, `<a>` for navigation, `<nav>`, `<main>`, `<aside>` for landmarks.
-- Color contrast: ensure text meets WCAG 2.1 AA minimum contrast ratio (4.5:1 for normal text, 3:1 for large text).
-
-## Component Guidelines
-
-- Components must be generic and reusable — no app-specific business logic.
-- Props API should follow composition patterns (Radix-style): compound components with `Root`, `Trigger`, `Content` subcomponents where applicable.
-- Interactive primitives declare their own cursor — `cursor-pointer` in the base, or the cursor the gesture implies (`cursor-col-resize`) — and consumers never add one to a design-system component.
-- Support `className` prop for consumer customization (merged via `cn()`).
-- Handle all interactive states: default, hover, focus, active, disabled.
-
-## Storybook
-
-- Story files are colocated with components: `Button.stories.tsx` next to `Button.tsx`.
-- Each component must have at least one story showing default state and variant combinations.
-- Use `args` and `argTypes` for interactive controls.
+- Check [shadcn/ui](https://ui.shadcn.com/docs/components) before writing a primitive by hand, and vendor it with `pnpm ds:add <name>`. Hand-write one only when no primitive covers the behavior or adopting it would mean disabling its core feature, and say which in the PR.
+- Under `src/components/ui/`, hand-edit only the normalizations `pnpm ds:add` reports; `--overwrite` discards anything else. To add behavior, wrap the primitive in a PascalCase component.
+- Import Radix from the unified `radix-ui` package, never `@radix-ui/react-*`: two import surfaces create two `DismissableLayer` registries and break nested overlays.
+- Learn tones split fill from text: `learn-*` for fills and rings, `learn-*-text` for text, because the fill shades fail WCAG AA as text.
+- CSS motion uses `duration-(--motion-duration-fast|base|slow)` and `ease-standard|enter|exit` plus a `motion-reduce:` escape hatch. `motion/react` takes every transition from `useMotionPreset()`. Never branch on `prefers-reduced-motion` by hand.
+- Interactive primitives declare their cursor in their base classes (`cursor-pointer`, or what the gesture implies): Tailwind v4 leaves buttons at `cursor: default`.

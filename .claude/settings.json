@@ -16,8 +16,7 @@
   "enabledPlugins": {
     "nx@nx-claude-plugins": true,
     "domain@knowtis-plugins": true,
-    "db-ops@knowtis-plugins": true,
-    "delivery@knowtis-plugins": true
+    "db-ops@knowtis-plugins": true
   },
   "extraKnownMarketplaces": {
     "nx-claude-plugins": {

@@ -623,7 +623,7 @@ the limits of the measured access-revocation bound.
 
 The project uses GitHub Actions (`.github/workflows/ci.yml`) with **Nx affected** — only projects a change touches are linted, typechecked, tested, and built.
 
-**Triggers:** pushes to `main`/`develop`, and pull requests against any base branch, so stacked PRs run CI against their parent branch. For stacked PRs, `nx-set-shas` computes affected against the PR's real base ref (`git merge-base origin/<base> HEAD`), so each level only re-verifies its own changes.
+**Triggers:** pushes to `main`/`develop`, and pull requests against any base branch. `nx-set-shas` computes affected against the PR's real base ref (`git merge-base origin/<base> HEAD`).
 
 **CI job** (single job, sequential steps): `pnpm skills:check` → `pnpm lint:config` → zizmor (workflow audit) → lint → typecheck → migration-drift check (`nx db:generate api` must produce no diff) → apply migrations (`nx db:migrate:run api` against the CI Postgres) → test (`--parallel=2`, hosted runners OOM beyond that) → production build → sharing E2E when `notes-e2e` is affected. The E2E target starts separate services, rebuilds with its own loopback URLs without Nx cache, and retains Playwright evidence for seven days. CI then exposes one `*_affected` output per app.
 

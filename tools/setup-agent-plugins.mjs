@@ -8,7 +8,6 @@ const plugins = [
   'nx@nx-claude-plugins',
   'domain@knowtis-plugins',
   'db-ops@knowtis-plugins',
-  'delivery@knowtis-plugins',
 ];
 
 function run(args, capture = false) {

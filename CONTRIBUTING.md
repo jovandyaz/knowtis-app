@@ -75,7 +75,7 @@ The commit message format is enforced by a Git hook.
 
 ### 6. Open a Pull Request
 
-- Push your branch and open a PR against `main`, or against the parent branch when stacking PRs (see [CLAUDE.md](CLAUDE.md))
+- Push your branch and open a PR against `main`
 - Fill in every section of the PR template, and delete the ones that do not apply rather than leaving them empty
 - Opening a PR from the CLI with `gh pr create --body` or `--body-file` skips the template, so compose the body from `.github/PULL_REQUEST_TEMPLATE.md` yourself
 - `## Verification` carries the commands you ran and what they printed; CI already proves lint, typecheck and tests, so spend that section on what CI cannot see
