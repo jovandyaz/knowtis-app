@@ -1,8 +1,8 @@
 # AI architecture in one page
 
-Knowtis has two AI surfaces on a shared core. The full reference is [AI.md](./AI.md).
+Knowtis serves AI through two surfaces on a shared core, and an MCP server lets external AI clients in. The full reference is [AI.md](./AI.md).
 
-| Surface            | What it does                                                                 | Code                         |
+| Part               | What it does                                                                 | Code                         |
 | ------------------ | ---------------------------------------------------------------------------- | ---------------------------- |
 | **Single-shot AI** | Editor actions, ghost text, voice notes                                      | `apps/api/src/modules/ai`    |
 | **Copilot**        | Conversational agent with tools, memory and approvals                        | `apps/api/src/modules/agent` |
@@ -21,7 +21,7 @@ client ── one message + conversationId ──▶ /agent socket
                  one streamText call ── tool results ───────┘
                         │        │
            silent or errors,     mutation requested
-           no answer text yet    │
+           nothing streamed      │
                         │        ▼
                         │     proposal parked in Redis ──▶ client approves ──▶ commit, resume
                         ▼
@@ -34,7 +34,7 @@ client ── one message + conversationId ──▶ /agent socket
 - **Humans approve copilot changes.** A mutation is a proposal until `agent:approve`. MCP is a separate surface: it applies changes directly under the [scopes the user granted](./MCP.md#scopes).
 - **Retrieved content is delivered as data.** Notes, memories and web results are screened by the [injection guard](./AI.md#prompt-injection-defense). The screen is best-effort, so what must hold is [containment when a model is fooled](./AI.md#guarantees-under-a-compromised-model).
 - **Bring-your-own-key (BYOK) fails closed.** A failing user key never falls back to a platform model.
-- **A stream never switches model once answer text has streamed.** A step that has shown only thinking can still fail over.
+- **A stream never switches model once answer text has streamed.** Before that, the first step of a turn can fail over even after showing thinking, and a continuation can fail over only if it streamed nothing or leaked raw tool markup.
 
 ## Which model runs
 

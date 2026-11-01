@@ -18,7 +18,7 @@ Keep routing in-process, built on the Vercel AI SDK:
 
 - `@knowtis/ai-gateway` owns the fallback chain and provider cooldowns.
 - The agent module owns the step loop: one `streamText` call per step, each with its own time-to-first-token and silence budgets.
-- A failing first step moves to the next candidate through the chain. A continuation step that stays silent or errors before streaming answer text does the same, replaying the threaded history without re-running tools.
+- A failing first step moves to the next candidate through the chain. A continuation step gets a bounded retry on its own model. If it stays silent or errors before streaming anything, it moves on too, replaying the threaded history without re-running tools.
 
 We build the part that needs turn state and buy the rest. The AI SDK abstracts providers. OpenRouter serves the seeded platform models. Vercel AI Gateway is an alternative mode enabled by `AI_GATEWAY_API_KEY`; it cannot route `openrouter:*` ids, so every intent and chain entry must first be pinned to other providers.
 
