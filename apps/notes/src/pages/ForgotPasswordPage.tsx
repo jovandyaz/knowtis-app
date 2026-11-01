@@ -54,7 +54,6 @@ export function ForgotPasswordPage() {
     resetRateLimit();
     forgotPassword.mutate(data.email, {
       onSuccess: () => {
-        toast.success(t('forgotPassword.successToast'));
         setSubmittedEmail(data.email);
         setSubmitted(true);
       },
@@ -80,7 +79,11 @@ export function ForgotPasswordPage() {
   if (submitted) {
     return (
       <AuthPageLayout>
-        <CardHeader className="space-y-1 text-center">
+        <CardHeader
+          role="status"
+          aria-live="polite"
+          className="space-y-1 text-center"
+        >
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--primary)/10">
             <CheckCircle className="h-6 w-6 text-(--primary)" />
           </div>
@@ -132,7 +135,11 @@ export function ForgotPasswordPage() {
 
   return (
     <AuthPageLayout>
-      <CardHeader className="space-y-1 text-center">
+      <CardHeader
+        role="status"
+        aria-live="polite"
+        className="space-y-1 text-center"
+      >
         <CardTitle className="text-2xl font-bold tracking-tight">
           {t('forgotPassword.title')}
         </CardTitle>

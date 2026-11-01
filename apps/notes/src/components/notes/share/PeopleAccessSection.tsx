@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
@@ -58,6 +58,7 @@ export function PeopleAccessSection({
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const savedStatusRef = useRef<HTMLParagraphElement>(null);
   const form = useForm<PersonInput>({
     resolver: zodResolver(PersonInputSchema),
     defaultValues: { email: '', permission: PERMISSION.VIEWER },
@@ -72,7 +73,9 @@ export function PeopleAccessSection({
 
   const reportSaved = () => {
     setSaved(true);
-    toast.success(t('share.people.saved'));
+    if (!savedStatusRef.current) {
+      toast.success(t('share.people.saved'));
+    }
   };
   const upsertError = (error: unknown) =>
     ApiClientError.isApiClientError(error) && error.status === 422
@@ -215,11 +218,14 @@ export function PeopleAccessSection({
           </p>
         ) : null}
       </form>
-      {saved ? (
-        <p role="status" className="text-sm text-(--muted-foreground)">
-          {t('share.people.saved')}
-        </p>
-      ) : null}
+      <p
+        ref={savedStatusRef}
+        role="status"
+        aria-live="polite"
+        className="text-sm text-(--muted-foreground) empty:absolute"
+      >
+        {saved ? t('share.people.saved') : null}
+      </p>
       {rowError ? (
         <p role="alert" className="text-sm text-(--destructive)">
           {rowError}

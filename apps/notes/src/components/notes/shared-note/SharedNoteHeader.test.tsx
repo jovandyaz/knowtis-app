@@ -150,6 +150,23 @@ describe('SharedNoteHeader', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
+  it('shows a copied link with a check and announces it in a mounted live region', () => {
+    const view = renderHeader({ copied: false });
+    const liveRegion = view.container.querySelector('[aria-live="polite"]');
+    expect(liveRegion).toBeEmptyDOMElement();
+
+    view.rerender(
+      <TooltipProvider>
+        <SharedNoteHeader {...defaultProps} copied />
+      </TooltipProvider>
+    );
+
+    expect(liveRegion).toHaveTextContent('buttons.copied');
+    expect(
+      buttonNamed('buttons.copyLink').querySelector('.lucide-check')
+    ).toBeInTheDocument();
+  });
+
   it('builds its controls out of design-system buttons', () => {
     renderHeader();
 

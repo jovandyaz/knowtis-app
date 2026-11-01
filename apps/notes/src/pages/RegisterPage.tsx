@@ -73,10 +73,7 @@ export function RegisterPage() {
     registerMutation.mutate(
       { name: data.name, email: data.email, password: data.password },
       {
-        onSuccess: () => {
-          toast.success(t('register.successToast'));
-          setRegisteredEmail(data.email);
-        },
+        onSuccess: () => setRegisteredEmail(data.email),
         onError: (error) => {
           if (checkRateLimit(error)) {
             toast.error(t('errors.tooManyAttempts', { ns: 'common' }));

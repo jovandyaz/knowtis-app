@@ -75,6 +75,9 @@ export function SharedNoteActions({
 
   return (
     <div className="flex items-center gap-1">
+      <span aria-live="polite" className="sr-only">
+        {copied ? tCommon('buttons.copied') : ''}
+      </span>
       <SharedNoteAction
         label={tCommon('buttons.copyLink')}
         icon={copied ? Check : Share2}

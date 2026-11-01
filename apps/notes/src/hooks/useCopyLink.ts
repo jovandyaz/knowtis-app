@@ -20,7 +20,9 @@ export function useCopyLink() {
     try {
       await navigator.clipboard.writeText(window.location.href);
       setCopied(true);
-      toast.success(t('buttons.copied'));
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
       timeoutRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error(t('errors.somethingWentWrong'));
