@@ -26,6 +26,8 @@ import { ANONYMOUS_NOTE_LIMIT_CODE, SUPERTAGS } from '@knowtis/shared-types';
 import { MAX_IMAGE_BYTES, STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
 import { createValidationPipe } from '../../config/validation-pipe';
+import { MCP_BODY_FIELDS_SCOPE_KEY } from '../mcp/decorators/require-mcp-scope.decorator';
+import { MCP_SCOPES } from '../mcp/mcp-token';
 import {
   CreateNoteHandler,
   DeleteNoteHandler,
@@ -184,6 +186,20 @@ async function startNotesApp(providers: Provider[]): Promise<INestApplication> {
   await app.listen(0);
   return app;
 }
+
+describe('NotesController MCP scopes', () => {
+  it('should bind every sharing field of a note update to the share scope', () => {
+    expect(
+      Reflect.getMetadata(
+        MCP_BODY_FIELDS_SCOPE_KEY,
+        NotesController.prototype.update
+      )
+    ).toEqual({
+      scope: MCP_SCOPES.SHARE,
+      fields: ['generalAccess', 'generalAccessPermission', 'editorsCanShare'],
+    });
+  });
+});
 
 describe('NotesController route order', () => {
   let app: INestApplication;

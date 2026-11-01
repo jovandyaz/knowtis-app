@@ -1,4 +1,5 @@
 import {
+  extractBearerToken,
   JWT_VERIFICATION_KEY_SELECTOR,
   type JwtVerificationKeySelector,
 } from '@jovandyaz/auth-nestjs';
@@ -14,8 +15,20 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 
-import { MCP_SCOPE_KEY } from '../decorators/require-mcp-scope.decorator';
+import {
+  MCP_BODY_FIELDS_SCOPE_KEY,
+  MCP_SCOPE_KEY,
+  type McpBodyFieldsScope,
+} from '../decorators/require-mcp-scope.decorator';
 import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../mcp-token';
+
+function carriesAnyField(body: unknown, fields: readonly string[]): boolean {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    fields.some((field) => field in body)
+  );
+}
 
 @Injectable()
 export class McpScopeGuard implements CanActivate {
@@ -37,7 +50,7 @@ export class McpScopeGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<Request>();
-    const token = request.headers.authorization?.replace('Bearer ', '');
+    const token = extractBearerToken(request);
 
     if (!token) {
       return true;
@@ -63,6 +76,20 @@ export class McpScopeGuard implements CanActivate {
     if (!scopes.includes(requiredScope)) {
       throw new ForbiddenException(
         `MCP token missing required scope: '${requiredScope}'`
+      );
+    }
+
+    const bodyFields = this.reflector.getAllAndOverride<
+      McpBodyFieldsScope | undefined
+    >(MCP_BODY_FIELDS_SCOPE_KEY, [context.getHandler(), context.getClass()]);
+
+    if (
+      bodyFields &&
+      !scopes.includes(bodyFields.scope) &&
+      carriesAnyField(request.body, bodyFields.fields)
+    ) {
+      throw new ForbiddenException(
+        `MCP token missing required scope: '${bodyFields.scope}'`
       );
     }
 
