@@ -32,8 +32,10 @@ const UPLOAD_ALWAYS_RE = /^ +- name: Upload eval results\n +if: always\(\)$/m;
 const EVAL_STEP_RE = /^ +- id: eval\n +name: Run AI evals$/m;
 const VERDICT_STEP_RE =
   /^ +- id: verdict\n +name: .+\n +if: \$\{\{ !cancelled\(\) && matrix\.target == 'eval-security' && \(steps\.eval\.outcome == 'success' \|\| steps\.eval\.outcome == 'failure'\) \}\}\n +continue-on-error: true\n +run: npx nx run api:eval-gate-verdict$/m;
-const RED_ON_FAIL_STEP_RE =
-  /^ +- name: .+\n +if: \$\{\{ !cancelled\(\) && steps\.verdict\.outputs\.verdict == 'fail' \}\}\n +run: exit 1$/m;
+const RED_ON_FAIL_OR_CRASH_STEP_RE =
+  /^ +- name: .+\n +if: \$\{\{ !cancelled\(\) && \(steps\.verdict\.outputs\.verdict == 'fail' \|\| \(steps\.verdict\.outcome == 'failure' && steps\.verdict\.outputs\.verdict == ''\)\) \}\}\n +run: exit 1$/m;
+const WARN_ON_INCONCLUSIVE_STEP_RE =
+  /^ +- name: .+\n +if: \$\{\{ !cancelled\(\) && steps\.verdict\.outputs\.verdict == 'inconclusive' \}\}\n +run: echo "::warning::.+"$/m;
 const STEP_ORDER = [
   'Run AI evals',
   'id: verdict',
@@ -231,10 +233,14 @@ describe('weekly eval workflow', () => {
     }
   );
 
-  it('applies the contained budget to the security legs, red only on a decided fail', () => {
+  it('applies the contained budget to the security legs, red only on a decided fail or a crashed verdict', () => {
     expect(WORKFLOW).toMatch(EVAL_STEP_RE);
     expect(WORKFLOW).toMatch(VERDICT_STEP_RE);
-    expect(WORKFLOW).toMatch(RED_ON_FAIL_STEP_RE);
+    expect(WORKFLOW).toMatch(RED_ON_FAIL_OR_CRASH_STEP_RE);
+  });
+
+  it('warns on an inconclusive security verdict without failing the leg', () => {
+    expect(WORKFLOW).toMatch(WARN_ON_INCONCLUSIVE_STEP_RE);
   });
 
   it('runs the verdict before the drift comparison, and uploads whatever went red before it', () => {

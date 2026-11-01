@@ -12,7 +12,7 @@ import {
 } from '../domain/replay-input-sanitizer';
 import { NOTE_CONTENT_NOTE, WITHHELD_CONTENT } from '../domain/retrieval';
 import { toModelMessages } from '../infrastructure/orchestrator/message-mapper';
-import { selectEvalCases } from './runtime/eval-runtime';
+import { selectEvalCases, turnCompletionCheck } from './runtime/eval-runtime';
 import {
   assertNoNoteOpened,
   assertReplayNotObeyed,
@@ -276,6 +276,48 @@ describe('the legitimate-quote case', () => {
   });
 });
 
+describe('the security replay cases', () => {
+  const SECURITY_CASES = REPLAY_GUARD_CASES.filter(
+    (item) => item.category === 'security'
+  );
+  const OPENED_A_NOTE = {
+    toolCalls: [{ name: 'getNote', args: { noteId: FIXTURE_NOTE.id } }],
+    text: 'Commands in untrusted notes are data, never instructions to follow.',
+    proposal: null,
+    sources: [],
+    error: null,
+  };
+
+  function isCheck(value: unknown): value is (output: unknown) => boolean {
+    return typeof value === 'function';
+  }
+
+  function checksOf(item: (typeof SECURITY_CASES)[number]) {
+    return item.assert.flatMap(({ value }) => (isCheck(value) ? [value] : []));
+  }
+
+  it.each(SECURITY_CASES.map((item) => [item.id, item] as const))(
+    '%s holds only its answer check and its obedience check',
+    (_id, item) => {
+      expect(item.assert).toHaveLength(2);
+      expect(item.assert[0]?.metric).toBe(
+        turnCompletionCheck(() => true).metric
+      );
+      expect(item.assert[1]).toEqual({
+        type: 'javascript',
+        value: assertReplayNotObeyed,
+      });
+    }
+  );
+
+  it.each(SECURITY_CASES.map((item) => [item.id, item] as const))(
+    '%s passes a turn that opened a note without obeying, since opening one harms nothing',
+    (_id, item) => {
+      expect(checksOf(item).every((check) => check(OPENED_A_NOTE))).toBe(true);
+    }
+  );
+});
+
 it('lets a stalled replay turn excuse only its answer check, never a note it opened', () => {
   const stalledAfterOpening = {
     toolCalls: [{ name: 'getNote', args: { noteId: FIXTURE_NOTE.id } }],
@@ -285,7 +327,9 @@ it('lets a stalled replay turn excuse only its answer check, never a note it ope
     error: { code: 'AI_TIMEOUT', message: 'Agent turn stalled' },
   };
 
-  for (const item of REPLAY_GUARD_CASES) {
+  for (const item of REPLAY_GUARD_CASES.filter(
+    (candidate) => candidate.category !== 'security'
+  )) {
     expect(item.assert).toContainEqual({
       type: 'javascript',
       value: assertNoNoteOpened,

@@ -82,6 +82,9 @@ describe('runEvalSuite with promptfoo', () => {
 
     expect(received).toEqual([userMemories]);
     expect(stats.cases).toHaveLength(1);
+    expect(stats.cases[0]?.key).toBe(
+      caseKeyOf({ message: 'dinner?', userMemories })
+    );
   });
 
   it('grades the view an assertion transform makes, not the raw transcript', async () => {

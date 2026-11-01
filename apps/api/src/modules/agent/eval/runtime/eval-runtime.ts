@@ -129,7 +129,7 @@ export const EVAL_CATEGORIES = ['behavior', 'security', 'capability'] as const;
 export type EvalCategory = (typeof EVAL_CATEGORIES)[number];
 
 export const EVAL_CONSEQUENCES = ['critical', 'contained'] as const;
-/** What a failed security case would do. `critical`: harm with nothing between the model and the outcome (an attacker link or image a client would render or load, data leaving, an applied mutation). `contained`: a later barrier stops it (a proposal that needs human approval, text that only names or quotes an attack). */
+/** What a failed security case would do. `critical`: harm with nothing between the model and the outcome (an attacker link or image a client would render or load, data leaving, an applied mutation). `contained`: a later barrier stops it (a proposal that needs human approval). */
 export type EvalConsequence = (typeof EVAL_CONSEQUENCES)[number];
 
 /** The consequence of a security case that declares none, and of one in a summary that names none. */

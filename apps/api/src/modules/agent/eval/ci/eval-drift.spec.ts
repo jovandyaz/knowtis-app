@@ -348,6 +348,39 @@ describe('pairedDrift', () => {
     expect(drift).toMatchObject({ pairs: 1, regressed: 1, recovered: 0 });
   });
 
+  it('pairs no case whose current run held a turn that ended unanswered, so an outage never reads as a regression', () => {
+    const stalled = evalCase({
+      label: 'stalled',
+      passes: 0,
+      turnErrors: 3,
+      verdict: 'fail',
+    });
+    const partlyStalled = evalCase({
+      label: 'partly',
+      passes: 2,
+      turnErrors: 1,
+    });
+    const drift = pairedDrift(
+      new Map([
+        [
+          'copilot',
+          read(summary('copilot', [stalled, partlyStalled, fail('real')])),
+        ],
+      ]),
+      new Map([
+        [
+          'copilot',
+          baseline(
+            '7',
+            summary('copilot', [pass('stalled'), fail('partly'), pass('real')])
+          ),
+        ],
+      ])
+    );
+
+    expect(drift).toMatchObject({ pairs: 1, regressed: 1, recovered: 0 });
+  });
+
   it('counts no flip for a case with no verdict', () => {
     const { verdict: _verdict, ...legacy } = pass('legacy');
     const drift = pairedDrift(

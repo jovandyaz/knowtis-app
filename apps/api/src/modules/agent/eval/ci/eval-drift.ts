@@ -214,7 +214,7 @@ export function mcnemarExactP(b: number, c: number): number {
 
 /** This run against its baselines, pooled over every suite that has a comparable one. */
 export interface PairedDrift {
-  /** Cases present in both runs with graded trials in both. */
+  /** Cases present in both runs with graded trials in both, and no turn that ended unanswered in this run: an outage is not a regression. */
   readonly pairs: number;
   /** `b`: pairs whose verdict went from pass to fail. */
   readonly regressed: number;
@@ -237,7 +237,10 @@ function casePairs(
   const previousByKey = new Map(baseline.summary.cases.map((c) => [c.key, c]));
   return parsed.data.cases.flatMap((current) => {
     const previous = previousByKey.get(current.key);
-    return previous && gradedOf(previous) > 0 && gradedOf(current) > 0
+    return previous &&
+      gradedOf(previous) > 0 &&
+      gradedOf(current) > 0 &&
+      current.turnErrors === 0
       ? [[previous, current] as const]
       : [];
   });
