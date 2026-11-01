@@ -478,6 +478,16 @@ export interface EvalRunOptions {
   readonly categoryByCase?: ReadonlyMap<string, EvalCategory>;
 }
 
+function withoutVarExpansion(suite: EvalSuiteConfig) {
+  return {
+    ...suite,
+    defaultTest: {
+      ...suite.defaultTest,
+      options: { ...suite.defaultTest?.options, disableVarExpansion: true },
+    },
+  };
+}
+
 export async function runEvalSuite(
   suite: EvalSuiteConfig,
   options: EvalRunOptions = {}
@@ -485,7 +495,7 @@ export async function runEvalSuite(
   const trials = options.trials ?? 1;
   const { default: promptfoo } = await import('promptfoo');
   const record = await promptfoo.evaluate(
-    suite as Parameters<typeof promptfoo.evaluate>[0],
+    withoutVarExpansion(suite) as Parameters<typeof promptfoo.evaluate>[0],
     { maxConcurrency: 1, repeat: trials }
   );
   const summary = await record.toEvaluateSummary();

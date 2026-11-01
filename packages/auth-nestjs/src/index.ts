@@ -8,6 +8,8 @@ export type {
   JwtVerificationKeySelector,
 } from './lib/jwt-verification-key-selector';
 
+export { extractBearerToken } from './lib/extract-bearer-token';
+
 // Guards
 export { JwtAuthGuard } from './lib/guards/jwt-auth.guard';
 export { LocalAuthGuard } from './lib/guards/local-auth.guard';

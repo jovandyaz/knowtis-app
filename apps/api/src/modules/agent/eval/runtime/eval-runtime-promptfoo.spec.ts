@@ -58,6 +58,32 @@ describe('runEvalSuite with promptfoo', () => {
     ]);
   });
 
+  it('delivers an array var to the provider whole, as a single case', async () => {
+    const received: unknown[] = [];
+    const provider: ApiProvider = {
+      id: () => 'deterministic-array-var',
+      callApi: async (_prompt, context) => {
+        received.push(context?.vars['userMemories']);
+        return { output: 'pass' };
+      },
+    };
+    const userMemories = ['The user is vegan', 'The user lives in Lima'];
+
+    const stats = await runEvalSuite({
+      providers: [provider],
+      prompts: ['{{message}}'],
+      tests: [
+        {
+          vars: { message: 'dinner?', userMemories },
+          assert: [{ type: 'equals', value: 'pass' }],
+        },
+      ],
+    });
+
+    expect(received).toEqual([userMemories]);
+    expect(stats.cases).toHaveLength(1);
+  });
+
   it('grades the view an assertion transform makes, not the raw transcript', async () => {
     const provider: ApiProvider = {
       id: () => 'deterministic-transcript',
