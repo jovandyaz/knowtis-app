@@ -268,7 +268,7 @@
       "counter": "{{count}}/{{max}}",
       "saved": "Memoria guardada",
       "errors": {
-        "contentPolicy": "Las memorias no pueden incluir enlaces, correos, marcado ni código. Quítalos e inténtalo de nuevo.",
+        "contentPolicy": "Las memorias no pueden incluir enlaces, correos, marcado, código ni órdenes sobre notas. Quítalos e inténtalo de nuevo.",
         "injection": "Esto parece una instrucción para el copiloto, así que no se puede guardar. Escríbelo como un dato sobre ti.",
         "rejected": "Esta memoria no se puede guardar. Cambia el texto e inténtalo de nuevo.",
         "rateLimited": "Alcanzaste tu límite de uso de IA por ahora. Inténtalo más tarde.",

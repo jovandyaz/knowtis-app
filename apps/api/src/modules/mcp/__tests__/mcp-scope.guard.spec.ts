@@ -7,7 +7,11 @@ import { exportJWK, exportSPKI, generateKeyPair, SignJWT } from 'jose';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { deriveOauthPublicKeys } from '../../../config/oauth-public-keys';
-import { MCP_SCOPE_KEY } from '../decorators/require-mcp-scope.decorator';
+import {
+  MCP_BODY_FIELDS_SCOPE_KEY,
+  MCP_SCOPE_KEY,
+  type McpBodyFieldsScope,
+} from '../decorators/require-mcp-scope.decorator';
 import { McpScopeGuard } from '../guards/mcp-scope.guard';
 import { MCP_SCOPES } from '../mcp-token';
 
@@ -17,16 +21,21 @@ const HS256_TOKEN = `${Buffer.from(JSON.stringify({ alg: 'HS256' })).toString(
 
 function createGuard(overrides: {
   scopeMetadata?: string;
+  bodyFieldsScope?: McpBodyFieldsScope;
+  body?: unknown;
   token?: string;
+  authorization?: string;
   payload?: Record<string, unknown>;
   verifyRejects?: boolean;
   contextType?: string;
   oauthJwks?: string;
 }) {
   const reflector = {
-    getAllAndOverride: vi
-      .fn()
-      .mockReturnValue(overrides.scopeMetadata ?? undefined),
+    getAllAndOverride: vi.fn((key: string) =>
+      key === MCP_BODY_FIELDS_SCOPE_KEY
+        ? overrides.bodyFieldsScope
+        : overrides.scopeMetadata
+    ),
   } as unknown as Reflector;
 
   const verifyAsync = overrides.verifyRejects
@@ -56,10 +65,11 @@ function createGuard(overrides: {
     switchToHttp: vi.fn().mockReturnValue({
       getRequest: vi.fn().mockReturnValue({
         headers: {
-          authorization: overrides.token
-            ? `Bearer ${overrides.token}`
-            : undefined,
+          authorization:
+            overrides.authorization ??
+            (overrides.token ? `Bearer ${overrides.token}` : undefined),
         },
+        body: overrides.body,
       }),
     }),
   };
@@ -252,6 +262,108 @@ describe('McpScopeGuard', () => {
       context.getHandler(),
       context.getClass(),
     ]);
+  });
+});
+
+describe('McpScopeGuard across Authorization header forms', () => {
+  it.each([
+    ['a lowercase scheme', `bearer ${HS256_TOKEN}`],
+    ['an uppercase scheme', `BEARER ${HS256_TOKEN}`],
+    ['two spaces', `Bearer  ${HS256_TOKEN}`],
+    ['a tab', `Bearer\t${HS256_TOKEN}`],
+    ['a trailing word', `Bearer ${HS256_TOKEN} junk`],
+  ])(
+    'should enforce the route scope on a token sent with %s',
+    async (_, authorization) => {
+      const { guard, context } = createGuard({
+        scopeMetadata: MCP_SCOPES.WRITE,
+        authorization,
+        payload: { sub: 'user-1', source: 'mcp', scopes: MCP_SCOPES.READ },
+      });
+
+      await expect(guard.canActivate(context as never)).rejects.toThrow(
+        ForbiddenException
+      );
+    }
+  );
+
+  it('should refuse a lowercase-scheme token on a route without MCP scope metadata', async () => {
+    const { guard, context } = createGuard({
+      authorization: `bearer ${HS256_TOKEN}`,
+      payload: { sub: 'user-1', source: 'mcp', scopes: MCP_SCOPES.READ },
+    });
+
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
+      'MCP tokens cannot access this endpoint'
+    );
+  });
+});
+
+describe('McpScopeGuard with a scope bound to body fields', () => {
+  const SHARING_SCOPE: McpBodyFieldsScope = {
+    scope: MCP_SCOPES.SHARE,
+    fields: ['generalAccess', 'editorsCanShare'],
+  };
+
+  function guardFor(scopes: string, body: unknown) {
+    const { guard, context } = createGuard({
+      scopeMetadata: MCP_SCOPES.WRITE,
+      bodyFieldsScope: SHARING_SCOPE,
+      body,
+      token: HS256_TOKEN,
+      payload: { sub: 'user-1', source: 'mcp', scopes },
+    });
+    return guard.canActivate(context as never);
+  }
+
+  it('should reject a write token that changes a bound field', async () => {
+    await expect(
+      guardFor('notes:read,notes:write', { generalAccess: 'anyone_with_link' })
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should reject a write token that sets a bound field to null', async () => {
+    await expect(
+      guardFor('notes:read,notes:write', { generalAccess: null })
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should reject a write token that changes any bound field', async () => {
+    await expect(
+      guardFor('notes:read,notes:write', { editorsCanShare: true })
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should allow a write token that leaves the bound fields out', async () => {
+    await expect(
+      guardFor('notes:read,notes:write', { title: 'New title' })
+    ).resolves.toBe(true);
+  });
+
+  it('should allow a write token when the body is absent', async () => {
+    await expect(guardFor('notes:read,notes:write', undefined)).resolves.toBe(
+      true
+    );
+  });
+
+  it('should allow a token holding the bound scope to change the field', async () => {
+    await expect(
+      guardFor('notes:read,notes:write,notes:share', {
+        generalAccess: 'anyone_with_link',
+      })
+    ).resolves.toBe(true);
+  });
+
+  it('should leave a session token to the other guards', async () => {
+    const { guard, context } = createGuard({
+      scopeMetadata: MCP_SCOPES.WRITE,
+      bodyFieldsScope: SHARING_SCOPE,
+      body: { generalAccess: 'anyone_with_link' },
+      token: HS256_TOKEN,
+      payload: { sub: 'user-1' },
+    });
+
+    await expect(guard.canActivate(context as never)).resolves.toBe(true);
   });
 });
 
