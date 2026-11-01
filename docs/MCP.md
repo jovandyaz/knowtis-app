@@ -64,12 +64,12 @@ The resource-server metadata is **env-gated, not flag-gated**: it is advertised 
 
 OAuth clients request scopes individually; the consent screen lists each one before you approve.
 
-| Scope            | Grants                                                         |
-| ---------------- | -------------------------------------------------------------- |
-| `notes:read`     | List and read notes, view collaborators                        |
-| `notes:write`    | Create, update, and delete notes                               |
-| `notes:share`    | Share notes with other users                                   |
-| `offline_access` | Signals the client wants a **refresh token** to stay connected |
+| Scope            | Grants                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| `notes:read`     | List and read notes, view collaborators                                                           |
+| `notes:write`    | Create, update, and delete notes                                                                  |
+| `notes:share`    | Share notes with other users; with `notes:write`, change a note's link access or who may share it |
+| `offline_access` | Signals the client wants a **refresh token** to stay connected                                    |
 
 `offline_access` is OAuth-only and grants no data access — it only signals that the client wants a refresh token. Per [OIDC Core §11](https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess) the authorization server **drops `offline_access` from any request whose `prompt` does not contain `consent`**, and MCP clients are inconsistent here: some hardcode `prompt=consent`, others send no scope at all. So rather than depend on the client, Knowtis issues a refresh token to **every public MCP client** — the authorization-code + PKCE flow with no client authentication (`token_endpoint_auth_method: none`) — whether or not `offline_access` survived the strip. This uses oidc-provider's supported `issueRefreshToken` override and is what keeps a connection alive past the 1h access-token expiry; clients that _do_ send `prompt=consent` additionally see "Stay connected" listed on the consent screen. The one exception is an **explicit denial**: if `offline_access` was requested but rejected on the grant (recorded as a rejected OIDC scope), no refresh token is issued — a rejection always wins over the default-issue policy.
 
@@ -217,7 +217,7 @@ Response includes the full API key (shown only once):
 
 - `notes:read` — List and read notes, view collaborators
 - `notes:read,notes:write` — Above + create, update, delete notes
-- `notes:read,notes:write,notes:share` — Above + share notes with other users
+- `notes:read,notes:write,notes:share` — Above + share notes with other users and change a note's link access
 
 ### List keys
 
