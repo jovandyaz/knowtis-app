@@ -1,6 +1,6 @@
-import { Logger } from '@nestjs/common';
-
 import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
+
+import type { StepLogger } from './step-logger';
 
 export interface StreamHealth {
   ttfpMs: number | null;
@@ -71,7 +71,7 @@ export function openrouterUpstreamOf(part: unknown): string | null {
 }
 
 export function emitTurnHealth(
-  logger: Logger,
+  logger: StepLogger,
   userId: string,
   model: string,
   health: StreamHealth,

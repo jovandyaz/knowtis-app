@@ -1,5 +1,3 @@
-import type { Logger } from '@nestjs/common';
-
 function statusCodeOf(error: unknown): { statusCode?: number } {
   const status =
     typeof error === 'object' && error !== null
@@ -15,7 +13,7 @@ function statusCodeOf(error: unknown): { statusCode?: number } {
  * stream's error part.
  */
 export function logStreamErrorRedacted(
-  logger: Pick<Logger, 'debug'>,
+  logger: { debug(payload: Record<string, unknown>): void },
   context: Readonly<Record<string, string>>
 ): (event: { error: unknown }) => void {
   return ({ error }) => {

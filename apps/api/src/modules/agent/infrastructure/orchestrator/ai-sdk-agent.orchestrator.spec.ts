@@ -949,10 +949,10 @@ describe('AiSdkAgentOrchestrator', () => {
     );
   });
 
-  it('injects incoming knownNotes into the system prompt and returns the merged set on done', async () => {
+  it('injects incoming knownNotes into the system prompt', async () => {
     const orchestrator = makeOrchestrator();
 
-    const events = await collect(
+    await collect(
       orchestrator.run({
         execution: baseInput.execution,
         messages: [{ role: 'user', content: 'resume esa nota' }],
@@ -968,18 +968,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const system = lastSystemPrompt();
     expect(system).toContain('Earlier note');
     expect(system).toContain('prev-id');
-
-    const done = events.find(
-      (e): e is { type: 'done'; knownNotes: { id: string; title: string }[] } =>
-        (e as { type: string }).type === 'done'
-    );
-    expect(done?.knownNotes).toEqual(
-      expect.arrayContaining([
-        { id: 'prev-id', title: 'Earlier note' },
-        { id: 'n1', title: 'Productividad' },
-        { id: 'sx', title: 'ignored' },
-      ])
-    );
   });
 
   it('resolves a read-only-phase context when resuming a turn', async () => {

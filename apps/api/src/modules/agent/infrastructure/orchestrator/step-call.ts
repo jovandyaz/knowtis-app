@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import {
   isStepCount,
   streamText,
@@ -39,6 +38,7 @@ import type {
 } from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import { ToolExecutionError } from '../tools/tool-execution.error';
+import type { StepLogger } from './step-logger';
 import {
   createHealth,
   openrouterUpstreamOf,
@@ -46,7 +46,7 @@ import {
   type StreamHealth,
 } from './stream-health';
 import { scanForToolMarkup } from './tool-markup-guard';
-import { collectKnownNotes, collectSources } from './turn-collectors';
+import { collectSources } from './turn-collectors';
 import { bestEffortUsage, type StepUsageAccumulator } from './turn-usage';
 
 const AGENT_TEMPERATURE = 0.7;
@@ -105,7 +105,7 @@ function interruptionEvent(
   timeoutSignal: AbortSignal,
   stepUsage: StepUsageAccumulator,
   maxMs: number,
-  logger: Logger
+  logger: StepLogger
 ): AgentEvent | undefined {
   if (input.signal?.aborted) {
     return {
@@ -134,11 +134,10 @@ export interface TurnState {
   textDeltas: number;
   readonly stepUsage: StepUsageAccumulator;
   readonly sources: Map<string, AgentSource>;
-  readonly knownNotes: Map<string, AgentSource>;
 }
 
 export interface StepCallParams {
-  readonly logger: Logger;
+  readonly logger: StepLogger;
   readonly input: AgentRunInput;
   readonly model: string;
   readonly providerRegistry: ProviderRegistryFactory;
@@ -264,7 +263,6 @@ export async function* runStepCall(
         onStepEnd: ({ toolResults, usage }) => {
           turn.progressed = true;
           collectSources(toolResults, turn.sources);
-          collectKnownNotes(toolResults, turn.knownNotes);
           turn.stepUsage.inputTokens += usage?.inputTokens ?? 0;
           turn.stepUsage.outputTokens += usage?.outputTokens ?? 0;
         },

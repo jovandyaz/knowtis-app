@@ -199,7 +199,6 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       },
@@ -403,7 +402,6 @@ describe('RunAgentTurnHandler', () => {
         type: 'done',
         usage: { inputTokens: 10, outputTokens: 5, model: SERVED_MODEL },
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       },
@@ -466,7 +464,6 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       },
@@ -865,7 +862,6 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [{ id: 'n1', title: 'Productividad' }],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       },
@@ -913,7 +909,6 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       },
@@ -946,7 +941,7 @@ describe('RunAgentTurnHandler', () => {
     expect(done).toHaveBeenCalledWith(expect.objectContaining({ sources: [] }));
   });
 
-  it('threads knownNotes from prior assistant sources to the orchestrator and forwards them from done', async () => {
+  it('threads knownNotes from prior assistant sources to the orchestrator', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
@@ -957,7 +952,6 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [],
-        knownNotes: [{ id: 'n1', title: 'GTD' }],
         webSources: [],
         stopReason: 'completed',
       },
@@ -988,8 +982,6 @@ describe('RunAgentTurnHandler', () => {
       createMessageQuotaStub(),
       makeEvents()
     );
-    const done = vi.fn();
-
     await handler.execute(
       {
         userId: USER,
@@ -997,16 +989,18 @@ describe('RunAgentTurnHandler', () => {
         conversationId: 'conv-1',
         message: { content: 'hi' },
       },
-      { onChunk: vi.fn(), onDone: done, onError: vi.fn(), onProposal: vi.fn() }
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
     );
 
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({
         knownNotes: [{ id: 'prev', title: 'Earlier' }],
       })
-    );
-    expect(done).toHaveBeenCalledWith(
-      expect.objectContaining({ knownNotes: [{ id: 'n1', title: 'GTD' }] })
     );
   });
 
@@ -1310,7 +1304,6 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       },
@@ -1681,7 +1674,6 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       },
@@ -2376,7 +2368,6 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       },
@@ -4081,7 +4072,6 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-drifted-model',
         },
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       },
@@ -5269,7 +5259,6 @@ describe('RunAgentTurnHandler', () => {
           model: 'google:gemini-2.0-flash',
         },
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       },
@@ -6127,7 +6116,6 @@ describe('RunAgentTurnHandler', () => {
         model: 'anthropic:claude-sonnet-4-20250514',
       },
       sources: [{ id: 'n1', title: 'N1' }],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     } as const;
@@ -7621,7 +7609,6 @@ describe('RunAgentTurnHandler daily message quota', () => {
           type: 'done',
           usage: { inputTokens: 10, outputTokens: 0, model: SERVED_MODEL },
           sources: [],
-          knownNotes: [],
           webSources: [],
           stopReason: 'token_budget',
         },
@@ -8116,7 +8103,6 @@ describe('RunAgentTurnHandler daily message quota', () => {
           type: 'done',
           usage: { inputTokens: 10, outputTokens: 5, model: SERVED_MODEL },
           sources: [],
-          knownNotes: [],
           webSources: [],
           stopReason,
         },
@@ -8673,7 +8659,6 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
         type: 'done',
         usage: { inputTokens: 10, outputTokens: 5, model: SERVED_MODEL },
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason,
       },

@@ -834,7 +834,6 @@ export class AgentGateway
             costUsd: usage.costUsd,
           },
           sources: usage.sources,
-          knownNotes: usage.knownNotes,
           webSources: usage.webSources,
           stopReason: usage.stopReason,
           continuable: usage.continuable,

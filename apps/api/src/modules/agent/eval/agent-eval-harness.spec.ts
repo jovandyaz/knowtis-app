@@ -154,7 +154,6 @@ describe('production parity of an eval turn', () => {
             yield {
               type: 'done',
               sources: [],
-              knownNotes: [],
               webSources: [],
               stopReason: 'completed',
               usage: { model: MODEL, inputTokens: 1, outputTokens: 1 },
@@ -202,7 +201,6 @@ describe('per-case step cap', () => {
           yield {
             type: 'done',
             sources: [],
-            knownNotes: [],
             webSources: [],
             stopReason: 'completed',
             usage: { model: MODEL, inputTokens: 1, outputTokens: 1 },
@@ -244,7 +242,6 @@ describe('recalled memories', () => {
           yield {
             type: 'done',
             sources: [],
-            knownNotes: [],
             webSources: [],
             stopReason: 'completed',
             usage: { model: MODEL, inputTokens: 1, outputTokens: 1 },

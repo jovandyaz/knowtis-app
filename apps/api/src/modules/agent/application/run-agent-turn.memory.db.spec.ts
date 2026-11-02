@@ -110,7 +110,6 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
         type: 'done',
         usage: { inputTokens: 1, outputTokens: 1, model: MODEL },
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       };

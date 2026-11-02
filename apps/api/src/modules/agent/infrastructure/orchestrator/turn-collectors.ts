@@ -2,10 +2,7 @@ import type { ToolSet, TypedToolResult } from 'ai';
 
 import type { AgentSource } from '../../domain/agent-event';
 import { isWithheldRead } from '../../domain/memory-taint';
-import {
-  isSourceNote,
-  notesInToolOutput,
-} from '../../domain/tool-result-notes';
+import { isSourceNote } from '../../domain/tool-result-notes';
 
 type StepToolResult = TypedToolResult<ToolSet>;
 
@@ -24,17 +21,6 @@ export function collectSources(
     const { id, title } = result.output;
     if (!sink.has(id)) {
       sink.set(id, { id, title });
-    }
-  }
-}
-
-export function collectKnownNotes(
-  toolResults: readonly StepToolResult[],
-  sink: Map<string, AgentSource>
-): void {
-  for (const result of toolResults) {
-    for (const note of notesInToolOutput(result.output)) {
-      sink.set(note.id, note);
     }
   }
 }

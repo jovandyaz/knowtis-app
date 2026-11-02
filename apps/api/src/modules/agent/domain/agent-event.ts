@@ -36,7 +36,6 @@ export type AgentEvent =
       readonly type: 'done';
       readonly usage: AgentTurnUsage;
       readonly sources: readonly AgentSource[];
-      readonly knownNotes: readonly AgentSource[];
       readonly webSources: readonly WebSource[];
       readonly stopReason: AgentStopReason;
     }

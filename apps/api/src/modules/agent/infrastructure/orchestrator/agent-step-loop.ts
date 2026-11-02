@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import {
   pruneMessages,
   type ModelMessage,
@@ -51,6 +50,7 @@ import {
   toError,
   type TurnState,
 } from './step-call';
+import type { StepLogger } from './step-logger';
 import {
   AGENT_TURN_OUTCOME,
   emitTurnHealth,
@@ -87,7 +87,7 @@ const TOOL_MARKUP_LEAK_REASON = 'reply leaked raw tool-call markup';
 type StepRetryReason = 'ttft' | 'transient';
 
 function logRetry(
-  logger: Logger,
+  logger: StepLogger,
   userId: string,
   model: string,
   attempt: number,
@@ -147,7 +147,7 @@ function stallOutcome(
   progressed: boolean,
   throwOnFreshFailure: boolean,
   stallMs: number,
-  logger: Logger
+  logger: StepLogger
 ): AgentEvent {
   const { userId } = input.execution.subject;
   logger.warn({
@@ -166,7 +166,7 @@ function stallOutcome(
 }
 
 export interface AgentStepLoopParams {
-  readonly logger: Logger;
+  readonly logger: StepLogger;
   readonly providerRegistry: ProviderRegistryFactory;
   readonly input: AgentRunInput;
   readonly model: string;
@@ -194,7 +194,6 @@ export interface AgentStepLoopParams {
     readonly deadlineAt: number;
   };
   readonly sources: Map<string, AgentSource>;
-  readonly knownNotes: Map<string, AgentSource>;
   readonly proposals: ProposalCollector;
   readonly webSources: WebSourceCollector;
 }
@@ -242,7 +241,6 @@ export async function* runAgentStepLoop(
     textDeltas: 0,
     stepUsage: { inputTokens: 0, outputTokens: 0 },
     sources: params.sources,
-    knownNotes: params.knownNotes,
   };
   const turnUsage: TurnUsageAccumulator = {
     inputTokens: 0,
@@ -756,7 +754,6 @@ export async function* runAgentStepLoop(
             type: 'done',
             usage: turnUsageEvent(turnUsage, currentModel),
             sources: [...params.sources.values()],
-            knownNotes: [...params.knownNotes.values()],
             webSources: params.webSources.all,
             stopReason,
           };

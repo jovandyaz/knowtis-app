@@ -60,7 +60,6 @@ export interface AgentDonePayload {
   turnId?: string;
   usage: AgentUsagePayload;
   sources: AgentSource[];
-  knownNotes: AgentSource[];
   webSources: WebSource[];
   stopReason: AgentStopReason;
   /** Absent from servers that predate turn continuation. */

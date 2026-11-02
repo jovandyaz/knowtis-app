@@ -190,6 +190,31 @@ export default defineConfig([
       ],
     },
   },
+  // The orchestrator adapter owns Nest; the step loop and its budgets are plain functions.
+  {
+    basePath: workspaceRoot,
+    files: ['apps/api/src/modules/agent/infrastructure/orchestrator/*.ts'],
+    ignores: [
+      '**/*.spec.ts',
+      '**/agent-tool.registry.ts',
+      '**/ai-sdk-agent.orchestrator.ts',
+      '**/mutation-proposal.builder.ts',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@nestjs/*'],
+              message:
+                'The step loop files take a StepLogger or a plain function, never Nest directly.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Nx tags allow util→util, so only this stops these packages depending on the workspace.
   {
     basePath: workspaceRoot,

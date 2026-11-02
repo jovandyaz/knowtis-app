@@ -80,7 +80,6 @@ function capture() {
 const DONE: AgentDonePayload = {
   usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
   sources: [],
-  knownNotes: [],
   webSources: [],
   stopReason: 'completed',
 };
