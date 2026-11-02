@@ -137,6 +137,7 @@
     }
   },
   "editor": {
+    "contentLabel": "Note content",
     "back": "Back",
     "backToNotes": "Back to Notes",
     "share": "Share",

@@ -371,7 +371,7 @@ describe('FlashcardStudy', () => {
     await rateCorrect(FRONT_ONE.name);
 
     expect(
-      await screen.findByRole('button', { name: 'Back one' })
+      await screen.findByRole('button', { name: /Back one/ })
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', FRONT_TWO)).toBeNull();
     expect(completedProgress()).toHaveAttribute('aria-valuenow', '0');
@@ -433,7 +433,7 @@ describe('FlashcardStudy', () => {
       const target = event.target;
       if (
         target instanceof HTMLButtonElement &&
-        target.getAttribute('aria-label') === 'Front two'
+        target.textContent?.includes('Front two')
       ) {
         opacityAtFocus =
           target.parentElement?.parentElement?.parentElement?.parentElement
@@ -585,7 +585,7 @@ describe('FlashcardStudy', () => {
     await userEvent.keyboard(' ');
 
     expect(
-      await screen.findByRole('button', { name: 'Back one' })
+      await screen.findByRole('button', { name: /Back one/ })
     ).toBeInTheDocument();
   });
 
@@ -743,7 +743,7 @@ describe('FlashcardStudy', () => {
     await act(async () => release());
 
     expect(
-      screen.getByRole('button', { name: 'Back one' })
+      screen.getByRole('button', { name: /Back one/ })
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', FRONT_TWO)).not.toBeInTheDocument();
     expect(completedProgress()).toHaveAttribute('aria-valuenow', '1');

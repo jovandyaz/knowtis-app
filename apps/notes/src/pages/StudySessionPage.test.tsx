@@ -299,7 +299,7 @@ describe('StudySessionPage', () => {
     await rateCurrentCorrect(/Frente uno/);
 
     expect(
-      await screen.findByRole('button', { name: 'Dorso uno' })
+      await screen.findByRole('button', { name: /Dorso uno/ })
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', {
@@ -562,12 +562,12 @@ describe('StudySessionPage', () => {
   it('never puts the back of a card on its front', async () => {
     render(<StudySessionPage />);
 
-    expect(front(/Frente uno/)).toHaveAccessibleName('Frente uno');
+    expect(front(/Frente uno/)).not.toHaveAccessibleName(/Dorso uno/);
 
     await userEvent.click(front(/Frente uno/));
 
     expect(
-      screen.getByRole('button', { name: 'Dorso uno' })
+      screen.getByRole('button', { name: /Dorso uno/ })
     ).toBeInTheDocument();
   });
 

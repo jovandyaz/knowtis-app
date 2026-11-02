@@ -92,7 +92,7 @@ describe('FlashcardCard', () => {
     );
     expect(screen.getByText('✗')).toHaveAttribute('aria-hidden', 'true');
     expect(
-      screen.getByRole('button', { name: back })
+      screen.getByRole('button', { name: (name) => name.includes(back) })
     ).toHaveAccessibleDescription('ai.artifacts.flashcards.showFront');
   });
 

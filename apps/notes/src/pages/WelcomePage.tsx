@@ -96,7 +96,7 @@ export function WelcomePage() {
         transition={{ duration: 0.3, delay: 0.1 }}
         className="mt-10"
       >
-        <h2 className="text-xs font-medium text-(--muted-foreground)/50 uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-medium text-(--muted-foreground) uppercase tracking-wider mb-3">
           {t('welcome.recent')}
         </h2>
 
@@ -113,7 +113,7 @@ export function WelcomePage() {
             ))}
           </div>
         ) : recentNotes.length === 0 ? (
-          <p className="text-sm text-(--muted-foreground)/70 py-3">
+          <p className="text-sm text-(--muted-foreground) py-3">
             {t('welcome.noRecentNotes')}
           </p>
         ) : (
@@ -134,7 +134,7 @@ export function WelcomePage() {
                     {note.title}
                   </span>
                 </div>
-                <span className="text-xs text-(--muted-foreground)/50 shrink-0 ml-4">
+                <span className="text-xs text-(--muted-foreground) shrink-0 ml-4">
                   {formatRelativeTime(note.updatedAt, i18n.language)}
                 </span>
               </Link>

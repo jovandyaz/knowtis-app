@@ -12,7 +12,7 @@ const BAR_COLOR_PROPERTY = '--muted-foreground';
 const BAR_ACTIVE_COLOR_PROPERTY = '--primary';
 
 // Canvas ignores an empty fillStyle, so an unresolved token must never reach it.
-const FALLBACK_BAR_COLOR = 'oklch(0.560 0.008 290)';
+const FALLBACK_BAR_COLOR = 'oklch(0.510 0.008 290)';
 const FALLBACK_BAR_ACTIVE_COLOR = 'oklch(0.47 0.22 295)';
 
 // The theme tokens carry no alpha, so the bars keep their translucency here.

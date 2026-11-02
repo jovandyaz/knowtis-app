@@ -53,10 +53,9 @@ export function SidebarUserMenu({
           >
             <div
               aria-hidden
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--secondary) text-(--secondary-foreground) text-xs font-medium"
-            >
-              {initials || '?'}
-            </div>
+              data-initials={initials || '?'}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--secondary) text-(--secondary-foreground) text-xs font-medium before:content-[attr(data-initials)]"
+            />
             <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-(--foreground)">
               {displayName}
             </span>

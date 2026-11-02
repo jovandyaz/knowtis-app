@@ -51,7 +51,7 @@ const CommandMenuGroup = forwardRef<HTMLDivElement, CommandMenuGroupProps>(
     <div ref={ref} className={className} {...props}>
       {showSeparator && <div className="mx-2 my-2 border-t border-border/20" />}
       {label && (
-        <div className="px-2 py-1.5 text-2xs font-medium tracking-wide text-muted-foreground/70">
+        <div className="px-2 py-1.5 text-2xs font-medium tracking-wide text-muted-foreground">
           {label}
         </div>
       )}
@@ -96,7 +96,7 @@ const CommandMenuItem = forwardRef<HTMLButtonElement, CommandMenuItemProps>(
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-medium">{label}</span>
         {description && (
-          <span className="block truncate text-2xs text-muted-foreground/70">
+          <span className="block truncate text-2xs text-muted-foreground">
             {description}
           </span>
         )}

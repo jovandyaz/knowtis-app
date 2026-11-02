@@ -106,7 +106,6 @@ export function FlashcardCard({
           className="min-h-72 w-full [&_[data-face-side]]:shadow-none [&_[data-face-side]:hover]:border-(--border)"
           flipped={flipped}
           onFlip={onFlip}
-          aria-label={flipped ? back : front}
           aria-keyshortcuts={keyShortcuts}
           frontHint={t('ai.artifacts.flashcards.showBack')}
           backHint={t('ai.artifacts.flashcards.showFront')}

@@ -137,6 +137,7 @@
     }
   },
   "editor": {
+    "contentLabel": "Contenido de la nota",
     "back": "Volver",
     "backToNotes": "Volver a Notas",
     "share": "Compartir",

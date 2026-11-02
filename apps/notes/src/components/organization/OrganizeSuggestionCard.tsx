@@ -23,7 +23,7 @@ import {
 const CHIP_BASE = `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] transition-colors cursor-pointer ${TOUCH_TARGET_HEIGHT_CLASS}`;
 const CHIP_ACCEPTED = 'border-border/60 bg-muted/25 text-foreground';
 const CHIP_REJECTED =
-  'border-dashed border-border/40 text-muted-foreground/60 line-through';
+  'border-dashed border-border/40 text-muted-foreground line-through';
 const DISMISS_BUTTON = `ml-auto flex items-center justify-center rounded p-1 text-muted-foreground/60 transition-colors hover:text-foreground cursor-pointer ${TOUCH_TARGET_CLASS}`;
 
 interface OrganizeSuggestionCardProps {
@@ -93,7 +93,7 @@ export function OrganizeSuggestionCard({
         <span className="text-[13px] font-medium">
           {t('organization.suggestion.title')}
         </span>
-        <span className="text-xs text-muted-foreground/70">
+        <span className="text-xs text-muted-foreground">
           {t('organization.suggestion.subtitle')}
         </span>
         <button
@@ -109,7 +109,7 @@ export function OrganizeSuggestionCard({
       <div className="flex flex-col gap-2">
         {offersBucket && suggestion.bucket && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground/70">
+            <span className="text-xs text-muted-foreground">
               {t('organization.suggestion.moveTo')}
             </span>
             <button
@@ -126,7 +126,7 @@ export function OrganizeSuggestionCard({
 
         {offeredTags.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground/70">
+            <span className="text-xs text-muted-foreground">
               {t('organization.suggestion.tags')}
             </span>
             {offeredTags.map((tag) => {
@@ -142,7 +142,7 @@ export function OrganizeSuggestionCard({
                   <Hash className="size-3 opacity-60" />
                   {tag.path}
                   {tag.isNew && (
-                    <span className="text-[11px] text-muted-foreground/60">
+                    <span className="text-[11px] text-muted-foreground">
                       {t('organization.suggestion.newTag')}
                     </span>
                   )}
@@ -154,7 +154,7 @@ export function OrganizeSuggestionCard({
 
         {suggestion.relatedNotes.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground/70">
+            <span className="text-xs text-muted-foreground">
               {t('organization.suggestion.related')}
             </span>
             {suggestion.relatedNotes.map((note) => (

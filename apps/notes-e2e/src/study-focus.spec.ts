@@ -39,15 +39,12 @@ test('studies a deck in focus mode with the keyboard and returns to the note', a
       url.searchParams.get('study') === deckId
   );
   await expect(
-    dialog.getByRole('button', {
-      name: '¿Qué absorbe la clorofila?',
-      exact: true,
-    })
+    dialog.getByRole('button', { name: '¿Qué absorbe la clorofila?' })
   ).toBeVisible();
 
   await page.keyboard.press('Space');
   await expect(
-    dialog.getByRole('button', { name: 'Luz roja y azul.', exact: true })
+    dialog.getByRole('button', { name: 'Luz roja y azul.' })
   ).toHaveAttribute('aria-pressed', 'true');
   await expect(
     dialog.getByText('Luz roja y azul.', { exact: true })
@@ -59,10 +56,7 @@ test('studies a deck in focus mode with the keyboard and returns to the note', a
   await expect(
     dialog.getByRole('progressbar', { name: '1 of 2 answered', exact: true })
   ).toBeVisible();
-  const secondCard = dialog.getByRole('button', {
-    name: '¿Dónde ocurre?',
-    exact: true,
-  });
+  const secondCard = dialog.getByRole('button', { name: '¿Dónde ocurre?' });
   await expect(secondCard).toBeVisible();
   await expect(secondCard).toBeFocused();
 
@@ -94,7 +88,7 @@ test('studies a deck in focus mode with the keyboard and returns to the note', a
 
   await page.keyboard.press('Space');
   await expect(
-    dialog.getByRole('button', { name: 'En los cloroplastos.', exact: true })
+    dialog.getByRole('button', { name: 'En los cloroplastos.' })
   ).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('1');
   await expect(
@@ -407,7 +401,6 @@ for (const locale of ['en', 'es'] as const) {
               await dialog
                 .getByRole('button', {
                   name: 'Where does photosynthesis occur?',
-                  exact: true,
                 })
                 .click();
               await shot('card-back');
@@ -417,7 +410,6 @@ for (const locale of ['en', 'es'] as const) {
               await expect(
                 dialog.getByRole('button', {
                   name: 'Where do light-dependent reactions occur?',
-                  exact: true,
                 })
               ).toBeFocused();
               await dialog
@@ -426,7 +418,6 @@ for (const locale of ['en', 'es'] as const) {
               await dialog
                 .getByRole('button', {
                   name: 'Where does photosynthesis occur?',
-                  exact: true,
                 })
                 .click();
               await shot('card-revisited');
@@ -438,7 +429,6 @@ for (const locale of ['en', 'es'] as const) {
               await dialog
                 .getByRole('button', {
                   name: 'Where do light-dependent reactions occur?',
-                  exact: true,
                 })
                 .click();
               await dialog
@@ -447,7 +437,6 @@ for (const locale of ['en', 'es'] as const) {
               await expect(
                 dialog.getByRole('button', {
                   name: 'What pigment captures light?',
-                  exact: true,
                 })
               ).toBeFocused();
               const footer = dialog.locator('footer');
@@ -491,7 +480,6 @@ for (const locale of ['en', 'es'] as const) {
               ]) {
                 const card = dialog.getByRole('button', {
                   name: prompt,
-                  exact: true,
                 });
                 await expect(card).toBeVisible();
                 await card.click();

@@ -295,7 +295,7 @@ export function NoteList() {
             </button>
           )}
           {!isLoading && !isError && (
-            <span className="text-xs text-muted-foreground/70">
+            <span className="text-xs text-muted-foreground">
               {t('organization.notesCount', { count: total })}
             </span>
           )}

@@ -33,8 +33,9 @@ describe('SidebarUserMenu', () => {
       'border-t',
       'border-border'
     );
-    expect(screen.getByText('AL')).toHaveAttribute('aria-hidden', 'true');
-    expect(screen.getByText('AL')).toHaveClass('h-8', 'w-8');
+    const avatar = trigger.querySelector('[data-initials="AL"]');
+    expect(avatar).toHaveAttribute('aria-hidden', 'true');
+    expect(avatar).toHaveClass('h-8', 'w-8');
     expect(screen.getByText('Ada Lovelace')).toHaveClass('truncate', 'min-w-0');
     await userEvent.tab();
     expect(trigger).toHaveFocus();

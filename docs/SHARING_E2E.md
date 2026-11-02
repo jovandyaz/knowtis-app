@@ -12,6 +12,10 @@ post-deploy check in DEPLOYMENT.md. They also run with
 `IMAGE_IMPORT_ALLOWED_IPS=127.0.0.1`, so an image import may fetch from the image
 server a test starts on loopback; production refuses to boot with it set.
 
+## Accessibility
+
+`accessibility.spec.ts` runs axe with the WCAG A and AA rules over the critical surfaces, on mobile, desktop and desktop in dark mode. Serious and critical violations fail the run. Lesser ones are attached to the Playwright report.
+
 ## Run locally
 
 Use the repository's Node 24 and pnpm versions, with Docker running:

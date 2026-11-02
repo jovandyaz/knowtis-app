@@ -134,7 +134,7 @@ describe('NotePropertiesRow', () => {
 
     expect(controls).toEqual([
       'Áreas',
-      'organization.supertags.label',
+      'organization.supertags.label: organization.supertags.none',
       'organization.tags.remove',
       'organization.tags.addLabel',
       'organization.suggestion.ask',

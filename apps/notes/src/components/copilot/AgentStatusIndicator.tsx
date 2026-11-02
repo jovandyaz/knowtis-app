@@ -35,7 +35,7 @@ function ReasoningTail({ detail, className, ...props }: ReasoningTailProps) {
     <div
       ref={ref}
       className={cn(
-        'mt-1 break-words text-xs text-muted-foreground/70',
+        'mt-1 break-words text-xs text-muted-foreground',
         className
       )}
       aria-live="off"

@@ -69,7 +69,7 @@ function TypewriterPlaceholder({ texts }: { texts: string[] }) {
     <div
       aria-hidden="true"
       className={cn(
-        'absolute top-0 left-0 pointer-events-none text-muted-foreground/50 select-none',
+        'absolute top-0 left-0 pointer-events-none text-muted-foreground select-none',
         EDITOR_PADDING
       )}
     >
@@ -176,6 +176,8 @@ function InternalEditor({
     autofocus: autoFocus ? 'start' : false,
     editorProps: {
       attributes: {
+        role: 'textbox',
+        'aria-label': t('editor.contentLabel'),
         class: cn(
           'prose prose-sm sm:prose-base max-w-none',
           `${EDITOR_MIN_HEIGHT} ${EDITOR_PADDING}`,
