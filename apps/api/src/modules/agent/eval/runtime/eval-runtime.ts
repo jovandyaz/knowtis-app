@@ -43,6 +43,7 @@ export function createStructuredProvider<TVars, TOut>(
 
 /** The model every agent suite evaluates when `AI_EVAL_MODEL` is unset, and the weekly reference leg's. */
 export const DEFAULT_EVAL_MODEL = 'anthropic:claude-sonnet-5';
+export const GRADER_PROVIDER = 'anthropic:messages:claude-haiku-4-5';
 
 export function resolveEvalModel(envVar: string, fallback: string): string {
   const value = process.env[envVar];
