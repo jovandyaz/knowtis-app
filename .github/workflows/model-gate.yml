@@ -53,6 +53,15 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.pending.outputs.matrix) }}
     services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       postgres:
         image: pgvector/pgvector:pg16
         env:
@@ -68,6 +77,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/knowtis_eval
+      REDIS_URL: redis://127.0.0.1:6379
       JWT_SECRET: nightly-eval-jwt-secret-0000000000000000
       JWT_REFRESH_SECRET: nightly-eval-jwt-refresh-secret-11111111
       TOKEN_HASH_KEY: bmlnaHRseS1ldmFsLXRva2VuLWhhc2gta2V5LTMyYiE=

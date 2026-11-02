@@ -1,4 +1,4 @@
-import { extractHttpUrls } from '@knowtis/ai-gateway';
+import { extractHttpUrls } from '../../../ai/infrastructure/web-search/extract-urls';
 
 export class WebFetchAllowlist {
   private readonly urls = new Set<string>();

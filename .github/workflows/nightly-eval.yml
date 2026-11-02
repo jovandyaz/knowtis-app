@@ -87,6 +87,15 @@ jobs:
             target: eval-security
             trials: 10
     services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       postgres:
         # pgvector image: migrations create the `vector` extension for embeddings.
         image: pgvector/pgvector:pg16
@@ -103,6 +112,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/knowtis_eval
+      REDIS_URL: redis://127.0.0.1:6379
       # Throwaway values: the harness validates env shape only, never issues real tokens.
       JWT_SECRET: nightly-eval-jwt-secret-0000000000000000
       JWT_REFRESH_SECRET: nightly-eval-jwt-refresh-secret-11111111

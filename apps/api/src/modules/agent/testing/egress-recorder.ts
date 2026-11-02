@@ -1,7 +1,6 @@
 import { expect } from 'vitest';
 
-import type { WebSearchHit } from '@knowtis/ai-gateway';
-
+import type { WebSearchHit } from '../../ai/domain/ports/web-search.port';
 import type { CanaryHost } from './canary-host';
 
 export const TAVILY_HOST = 'api.tavily.com';

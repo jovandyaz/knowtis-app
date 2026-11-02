@@ -97,7 +97,7 @@ apps/api/src/modules/agent/      # Copilot — see apps/api/src/modules/agent/RE
 apps/api/src/modules/organization/  # POST /ai/organization/suggest
 
 packages/ai-gateway/src/         # @knowtis/ai-gateway — see packages/ai-gateway/README.md
-├── catalog/  chain/  guard/  tokens/  web-search/
+├── catalog/  chain/  guard/  tokens/
 └── logger.ts
 
 apps/notes/src/
@@ -949,6 +949,8 @@ All four AI paths emit OpenTelemetry spans consumed by Langfuse (see `modules/ob
 **Nothing is traced until an integration is registered.** AI SDK v7 emits no spans at all until `registerTelemetry()` (imported from `ai`) runs. `LangfuseTracingService` (`modules/observability/langfuse-tracing.service.ts`) registers `LangfuseVercelAiSdkIntegration` (`@langfuse/vercel-ai-sdk`) right after starting the NodeSDK, and only when both `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are configured — so telemetry stays a no-op without them.
 
 **Prompt/response content is redacted from traces by default — and the default is enforced at the wrapper, not at the call site.** v7 inverted v6's posture: telemetry is _enabled_ by default once an integration is registered, and `recordInputs`/`recordOutputs` default to **true**. Omitting the telemetry option therefore means "export everything", so `AISDKProvider` and `AIStructuredOutputSDKProvider` both pass `buildRedactedTelemetry(...)` unconditionally, defaulting `recordContent` to `false`. A caller that forgets the field gets redaction, never a leak; both providers pin this in their specs. Only the agent path opts into content, and only when `NODE_ENV !== 'production'` **and** the turn is not BYOK. So production traces (and every BYOK turn, regardless of environment) carry spans but never note content, memories, or history — a user paying with their own key never sends their content to the tracing backend.
+
+**Provider errors are scrubbed from every exported span.** `recordInputs: false` does not cover failures: the AI SDK copies the error message and stack into the span's status and `exception` event, and a provider can echo a prompt or a key fragment there. `ErrorScrubbingSpanProcessor` sits in front of `LangfuseSpanProcessor` and leaves only the error type, so a failed call still shows as failed. Platform failures keep the message in our own logs; a BYOK turn logs a fixed string instead.
 
 **Trace identity moved off telemetry metadata.** v7's `TelemetryOptions` has no `metadata` field, so `userId` and tags travel through `propagateAttributes()` from `@langfuse/tracing` (wrapped as `withTraceIdentity`), and `environment` is set once on the `LangfuseSpanProcessor`. `transcribe()` is not instrumented by the SDK and takes no telemetry option — voice transcription emits no span of its own.
 

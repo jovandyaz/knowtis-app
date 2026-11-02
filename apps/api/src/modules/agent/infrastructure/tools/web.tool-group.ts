@@ -2,17 +2,17 @@ import { Inject, Injectable } from '@nestjs/common';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 
-import {
-  detectPromptInjection,
-  filterExternalHits,
-  isHttpUrl,
-} from '@knowtis/ai-gateway';
+import { detectPromptInjection } from '@knowtis/ai-gateway';
 
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
   WEB_SEARCH_PORT,
   type WebSearchPort,
 } from '../../../ai/domain/ports/web-search.port';
+import {
+  filterExternalHits,
+  isHttpUrl,
+} from '../../../ai/infrastructure/web-search/filter-external-content';
 import { InjectionGuardService } from '../../application/injection-guard.service';
 import type { AgentToolContext, AgentToolGroup } from './agent-tool';
 import {
