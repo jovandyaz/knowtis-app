@@ -1,7 +1,9 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NodeSDK } from '@opentelemetry/sdk-node';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ErrorScrubbingSpanProcessor } from './error-scrubbing-span-processor';
 import {
   LANGFUSE_SHUTDOWN_TIMEOUT_MS,
   LangfuseTracingService,
@@ -70,6 +72,19 @@ describe('LangfuseTracingService', () => {
     await service.onApplicationShutdown();
     expect(processorFlush).toHaveBeenCalledOnce();
     expect(sdkShutdown).toHaveBeenCalledOnce();
+  });
+
+  it('exports through the error scrubber, never the Langfuse processor directly', () => {
+    makeService({
+      LANGFUSE_PUBLIC_KEY: 'pk',
+      LANGFUSE_SECRET_KEY: 'sk',
+      NODE_ENV: 'test',
+    }).onApplicationBootstrap();
+
+    const [config] = vi.mocked(NodeSDK).mock.calls[0] ?? [];
+    expect(config?.spanProcessors).toEqual([
+      expect.any(ErrorScrubbingSpanProcessor),
+    ]);
   });
 
   describe('bounds the shutdown flush', () => {
