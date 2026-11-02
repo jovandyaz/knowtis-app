@@ -12,7 +12,12 @@ import { motion } from 'motion/react';
 
 import type { NoteWithAccess } from '@knowtis/api-client';
 import { useRecentNotes } from '@knowtis/data-access-notes';
-import { Button, buttonVariants, cn } from '@knowtis/design-system';
+import {
+  Button,
+  buttonVariants,
+  cn,
+  useMotionPreset,
+} from '@knowtis/design-system';
 import { formatRelativeTime } from '@knowtis/shared-util';
 
 type GreetingKey =
@@ -35,6 +40,7 @@ const WELCOME_RECENT_NOTES = 5;
 
 export function WelcomePage() {
   const { t, i18n } = useTranslation(['common', 'notes']);
+  const preset = useMotionPreset();
   const user = useAuthUser();
   const { data: recentNotes = [], isLoading } =
     useRecentNotes(WELCOME_RECENT_NOTES);
@@ -48,7 +54,7 @@ export function WelcomePage() {
       <motion.h1
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
+        transition={preset.fade}
         className="text-[28px] md:text-3xl font-semibold tracking-tight text-(--foreground)"
       >
         {t(getGreetingKey())}
@@ -59,7 +65,7 @@ export function WelcomePage() {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.05 }}
+        transition={{ ...preset.fade, delay: preset.stagger }}
         className="mt-6 flex gap-3"
       >
         <Button
@@ -93,7 +99,7 @@ export function WelcomePage() {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 }}
+        transition={{ ...preset.fade, delay: preset.stagger * 2 }}
         className="mt-10"
       >
         <h2 className="text-xs font-medium text-(--muted-foreground) uppercase tracking-wider mb-3">
