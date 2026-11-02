@@ -1,6 +1,6 @@
 # @knowtis/ai-gateway
 
-Framework-free core for multi-provider LLM access: model index and pricing, provider fallback chains, prompt-injection defense, token/cost estimation, and web search. Consumed by the API's `ai`, `agent`, `artifacts`, and `organization` modules behind NestJS ports.
+Framework-free core for multi-provider LLM access: model index and pricing, provider fallback chains, prompt-injection defense, and token/cost estimation. Consumed by the API's `ai`, `agent`, `artifacts`, and `organization` modules behind NestJS ports.
 
 ## Golden rule: zero workspace dependencies
 
@@ -12,18 +12,16 @@ This package imports **no other `@knowtis/*` package** and **no framework** (no 
 - **Provider fallback chain** — `executeWithChain` / `streamWithChain` across an ordered candidate list with a cooldown tracker that skips recently-failed providers.
 - **Prompt-injection guard** — `detectPromptInjection` (OWASP LLM01 patterns) + `sanitizeContent` for untrusted input.
 - **Token & cost** — `estimateTokenCount` and `computeTokenCostUsd`.
-- **Web search** — agnostic `WebSearchProvider` port + a framework-free Tavily implementation, with allowlist filtering of attacker-controlled URLs.
 
 ## Module map
 
-| Path          | Responsibility                                                                                                                                                                                                                                                                                                                                          |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `catalog/`    | `model-catalog` (`MODEL_CATALOG` symbol + `ModelCatalog`, `ModelPricing`, `ModelContextWindow` interfaces), `indexed-model` (`IndexedModel` row shape), `normalize-models-dev` + `normalize-openrouter` (source normalizers), `model-index-catalog` + `model-index.snapshot` (catalog and vendored floor), `transcription-prices`, `compute-token-cost` |
-| `chain/`      | `model-chain` (`executeWithChain` / `streamWithChain`, candidate resolution, `cooldownKeyOf`, error classifiers), `provider-cooldown.tracker`                                                                                                                                                                                                           |
-| `guard/`      | `prompt-guard` (`detectPromptInjection`), `input-sanitizer` (`sanitizeContent`), `injection-corpus` (`ATTACK_CORPUS` / `BENIGN_CORPUS`, the package-local regression corpus the guard is tested against; not part of the public API)                                                                                                                    |
-| `tokens/`     | `token-estimator` (`estimateTokenCount`, `gpt-tokenizer`)                                                                                                                                                                                                                                                                                               |
-| `web-search/` | `web-search.types` (port), `tavily-web-search` (impl), `filter-external-content` (URL allowlist), `extract-urls` (`extractHttpUrls`)                                                                                                                                                                                                                    |
-| `logger.ts`   | `GatewayLogger` — the `{ warn, error }` interface the chain and cooldown tracker log through; the API passes a NestJS `Logger`-backed adapter                                                                                                                                                                                                           |
+| Path        | Responsibility                                                                                                                                                                                                                                                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `catalog/`  | `model-catalog` (`MODEL_CATALOG` symbol + `ModelCatalog`, `ModelPricing`, `ModelContextWindow` interfaces), `indexed-model` (`IndexedModel` row shape), `normalize-models-dev` + `normalize-openrouter` (source normalizers), `model-index-catalog` + `model-index.snapshot` (catalog and vendored floor), `transcription-prices`, `compute-token-cost` |
+| `chain/`    | `model-chain` (`executeWithChain` / `streamWithChain`, candidate resolution, `cooldownKeyOf`, error classifiers), `provider-cooldown.tracker`                                                                                                                                                                                                           |
+| `guard/`    | `prompt-guard` (`detectPromptInjection`), `input-sanitizer` (`sanitizeContent`), `injection-corpus` (`ATTACK_CORPUS` / `BENIGN_CORPUS`, the package-local regression corpus the guard is tested against; not part of the public API)                                                                                                                    |
+| `tokens/`   | `token-estimator` (`estimateTokenCount`, `gpt-tokenizer`)                                                                                                                                                                                                                                                                                               |
+| `logger.ts` | `GatewayLogger` — the `{ warn, error }` interface the chain and cooldown tracker log through; the API passes a NestJS `Logger`-backed adapter                                                                                                                                                                                                           |
 
 ## Public API
 
@@ -34,9 +32,8 @@ Everything is exported from [`src/index.ts`](src/index.ts):
 - **Chain:** `executeWithChain`, `streamWithChain`, `resolveChainCandidates`, `providerOf`, `cooldownKeyOf`, `OPENROUTER_PROVIDER`, `isAbortError`, `isOverloadedError`, `ProviderCooldownTracker` (+ `ChainScope`, `ChainContext`, `StreamChainContext`, `ChainAttemptInfo`, `ChainResolutionInput`, `CooldownConfig`, `ProviderCooldown`, `ProviderHealthSnapshot` types).
 - **Guard:** `detectPromptInjection`, `sanitizeContent`.
 - **Tokens:** `estimateTokenCount`.
-- **Web search:** `TavilyWebSearch`, `filterExternalHits`, `isHttpUrl`, `extractHttpUrls`, `WebSearchProvider` port (+ `WebSearchHit`, `WebSearchResult`, `WebFetchResult`, `WebSearchOptions`, `TavilyConfig`, `SafeExternalSource` types).
 
-In `apps/api`, `MODEL_CATALOG` is bound to `CompositeModelCatalog` and `WebSearchProvider` is adapted by `TavilyWebSearchAdapter`; the full binding table is in [docs/AI.md — Ports & Adapters](../../docs/AI.md#ports--adapters).
+In `apps/api`, `MODEL_CATALOG` is bound to `CompositeModelCatalog`; the full binding table is in [docs/AI.md — Ports & Adapters](../../docs/AI.md#ports--adapters).
 
 ## Testing
 

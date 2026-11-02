@@ -1,13 +1,34 @@
-import { isHttpUrl } from './filter-external-content';
 import type {
-  TavilyConfig,
-  TavilyExtractResponse,
-  TavilySearchResponse,
   WebFetchResult,
   WebSearchOptions,
   WebSearchProvider,
   WebSearchResult,
-} from './web-search.types';
+} from '../../domain/ports/web-search.port';
+import { isHttpUrl } from './filter-external-content';
+
+export interface TavilyConfig {
+  readonly apiKey: string;
+  readonly maxResults: number;
+  readonly depth: 'basic' | 'advanced';
+  readonly timeoutMs: number;
+  /** USD per Tavily credit; zero on plans whose monthly credits are included. */
+  readonly pricePerCreditUsd: number;
+}
+
+interface TavilySearchResponse {
+  readonly answer?: string;
+  readonly results: {
+    title: string;
+    url: string;
+    content: string;
+    score: number;
+  }[];
+}
+
+interface TavilyExtractResponse {
+  readonly results: { url: string; raw_content: string }[];
+  readonly failed_results?: { url: string; error: string }[];
+}
 
 const BASIC_CREDITS = 1;
 const ADVANCED_SEARCH_CREDITS = 2;

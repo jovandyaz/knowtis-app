@@ -1,5 +1,6 @@
-import { detectPromptInjection } from '../guard/prompt-guard';
-import type { WebSearchHit } from './web-search.types';
+import { detectPromptInjection } from '@knowtis/ai-gateway';
+
+import type { WebSearchHit } from '../../domain/ports/web-search.port';
 
 export interface SafeExternalSource {
   readonly title: string;
