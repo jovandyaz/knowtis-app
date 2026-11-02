@@ -28,7 +28,7 @@ export function SharedNoteHeader({
         <div className="flex items-center gap-2 md:gap-3">
           <KnowtisLogo className="h-5 w-auto text-primary" />
           <SharedNoteBadge canEdit={canEdit} />
-          <span className="hidden items-center gap-1.5 text-xs text-muted-foreground/50 md:flex">
+          <span className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
             <span>{ownerName}</span>
             <span>&middot;</span>
             <span>{format(updatedAt, 'MMM d, yyyy')}</span>

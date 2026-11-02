@@ -12,7 +12,7 @@ import { formatRelativeTime } from '@knowtis/shared-util';
 
 const CARD_LAYOUT = 'mt-8 flex flex-col gap-4';
 const SECTION_TITLE =
-  'text-xs font-medium text-(--muted-foreground)/50 uppercase tracking-wider';
+  'text-xs font-medium text-(--muted-foreground) uppercase tracking-wider';
 const CTA_CLASS = 'w-full rounded-lg px-4 text-sm font-medium';
 
 export function StudyTodayCard() {

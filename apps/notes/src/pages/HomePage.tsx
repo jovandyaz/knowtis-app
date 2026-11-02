@@ -11,7 +11,7 @@ export function HomePage() {
         <h1 className="text-[28px] md:text-3xl font-bold tracking-tight text-(--foreground)">
           {t('notes:list.title')}
         </h1>
-        <p className="mt-2 text-(--muted-foreground)/70">
+        <p className="mt-2 text-(--muted-foreground)">
           {t('common:welcome.notesDescription')}
         </p>
       </div>

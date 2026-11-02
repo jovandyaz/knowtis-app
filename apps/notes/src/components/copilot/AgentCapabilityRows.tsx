@@ -39,7 +39,6 @@ export function AgentCapabilityRows({
             key={labelKey}
             type="button"
             onClick={() => onSelect(t(promptKey))}
-            aria-label={`${label}. ${hint}`}
             className="flex min-h-10 w-full items-center gap-2.5 rounded-xl border border-border bg-muted/40 px-3 py-2 text-left transition-colors hover:bg-muted active:scale-[0.99] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring)"
           >
             <Icon className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />

@@ -75,6 +75,9 @@ export function NotePropertiesRow({
   const { data: catalog } = useSupertagCatalog();
   const [pendingSupertag, setPendingSupertag] = useState<Supertag | null>(null);
   const editingSupertag = pendingSupertag ?? supertag;
+  const supertagName = supertag
+    ? t(`organization.supertags.names.${supertag}`)
+    : t('organization.supertags.none');
   const activeFilter = bucket ?? INBOX_FILTER;
   const label = t(`organization.buckets.${activeFilter}`);
 
@@ -181,13 +184,11 @@ export function NotePropertiesRow({
 
         <DropdownMenu>
           <DropdownMenuTrigger
-            aria-label={t('organization.supertags.label')}
+            aria-label={`${t('organization.supertags.label')}: ${supertagName}`}
             className={MENU_CHIP_CLASSES}
           >
             <Shapes className="size-3 opacity-60" />
-            {supertag
-              ? t(`organization.supertags.names.${supertag}`)
-              : t('organization.supertags.none')}
+            {supertagName}
             <ChevronDown className="size-3 opacity-70" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-52">

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { AnyExtension } from '@tiptap/core';
 import { EditorContent, useEditor } from '@tiptap/react';
@@ -41,11 +42,23 @@ export function DiffPreview({
     () => [...extensions, ProposalDiff],
     [extensions]
   );
+  const { t } = useTranslation('notes');
+  const editorProps = useMemo(
+    () => ({
+      attributes: {
+        role: 'textbox',
+        'aria-readonly': 'true',
+        'aria-label': t('editor.contentLabel'),
+      },
+    }),
+    [t]
+  );
   const editor = useEditor(
     {
       extensions: allExtensions,
       content: diff.after.toJSON(),
       editable: false,
+      editorProps,
     },
     [diff, allExtensions]
   );

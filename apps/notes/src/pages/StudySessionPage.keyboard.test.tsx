@@ -254,7 +254,7 @@ describe('StudySessionPage keyboard map', () => {
     fireEvent.keyDown(document.body, { key: '2' });
 
     expect(
-      screen.getByRole('button', { name: 'Dorso uno' })
+      screen.getByRole('button', { name: /Dorso uno/ })
     ).toBeInTheDocument();
 
     fireEvent.keyDown(document.body, { key: '2' });
@@ -280,7 +280,7 @@ describe('StudySessionPage keyboard map', () => {
     releaseReview();
     await settleReview();
     expect(
-      screen.getByRole('button', { name: 'Dorso uno' })
+      screen.getByRole('button', { name: /Dorso uno/ })
     ).toBeInTheDocument();
 
     fireEvent.keyDown(document.body, { key: '2' });
@@ -302,7 +302,7 @@ describe('StudySessionPage keyboard map', () => {
     fireEvent.keyDown(document.body, { key: 'ArrowRight' });
 
     expect(
-      screen.getByRole('button', { name: 'Dorso uno' })
+      screen.getByRole('button', { name: /Dorso uno/ })
     ).toBeInTheDocument();
 
     releaseReview();

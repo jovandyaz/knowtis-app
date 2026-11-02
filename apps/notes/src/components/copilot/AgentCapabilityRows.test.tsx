@@ -24,10 +24,8 @@ describe('AgentCapabilityRows', () => {
     expect(onSelect).toHaveBeenCalledWith(
       'ai.copilot.empty.capability.understand.prompt'
     );
-    expect(button).toHaveAttribute(
-      'aria-label',
-      'ai.copilot.empty.capability.understand.label. ai.copilot.empty.capability.understand.hint'
-    );
+    expect(button).toHaveTextContent('capability.understand.label');
+    expect(button).toHaveTextContent('capability.understand.hint');
   });
 
   it('sends the write demo prompt on click', async () => {

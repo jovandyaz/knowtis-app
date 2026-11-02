@@ -9,7 +9,7 @@
         "200": { "value": "oklch(0.950 0.005 290)", "type": "color" },
         "300": { "value": "oklch(0.930 0.005 290)", "type": "color" },
         "400": { "value": "oklch(0.680 0.006 290)", "type": "color" },
-        "500": { "value": "oklch(0.560 0.008 290)", "type": "color" },
+        "500": { "value": "oklch(0.510 0.008 290)", "type": "color" },
         "600": { "value": "oklch(0.330 0.012 290)", "type": "color" },
         "700": { "value": "oklch(0.305 0.012 290)", "type": "color" },
         "800": { "value": "oklch(0.275 0.014 290)", "type": "color" },

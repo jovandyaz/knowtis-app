@@ -209,7 +209,7 @@ export function SidebarNotesSection() {
         )}
 
         {!isError && notes?.length === 0 && (
-          <span className="px-2 py-1 text-xs text-muted-foreground/60">
+          <span className="px-2 py-1 text-xs text-muted-foreground">
             {t('sidebar.noNotesYet')}
           </span>
         )}
