@@ -8,7 +8,7 @@ packages:
 minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   # First-party, published from jovandyaz/llm-router with npm provenance
-  - '@jovandyaz/llm-router'
+  - '@jovandyaz/llm-router@0.1.2'
   # Renovate security update: pnpm@10.34.5
   - pnpm@10.34.5
   # Renovate security update: nx@22.7.7
