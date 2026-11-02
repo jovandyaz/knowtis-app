@@ -6,6 +6,7 @@ import {
   NOTE_UNAVAILABLE_INPUT,
   NOTE_UNAVAILABLE_OUTPUT,
   noteIdsInToolParts,
+  notesInToolOutput,
   redactUnreadableToolParts,
 } from './tool-result-notes';
 
@@ -69,6 +70,35 @@ const rowsOf = (
 ];
 
 const note = (id: string) => ({ id, title: `title-${id}` });
+
+describe('notesInToolOutput', () => {
+  const entry = (id: string) => ({ id, title: `title-${id}` });
+
+  it('reads the notes out of a searchNotes result', () => {
+    expect(notesInToolOutput({ hits: [entry('a'), entry('b')] })).toEqual([
+      entry('a'),
+      entry('b'),
+    ]);
+  });
+
+  it('treats notes pending indexing as notes too', () => {
+    expect(
+      notesInToolOutput({ hits: [], unindexed: [entry('fresh')] })
+    ).toEqual([entry('fresh')]);
+  });
+
+  it('reads the bare array listRecentNotes returns', () => {
+    expect(notesInToolOutput([entry('recent')])).toEqual([entry('recent')]);
+  });
+
+  it('reads a single-object result such as getNote', () => {
+    expect(notesInToolOutput(entry('one'))).toEqual([entry('one')]);
+  });
+
+  it('ignores an output that carries no note', () => {
+    expect(notesInToolOutput({ total: 3, owned: 3 })).toEqual([]);
+  });
+});
 
 describe('noteIdsInToolParts', () => {
   it('names the notes a result depends on through its call argument and its output, once each', () => {

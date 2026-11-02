@@ -187,7 +187,7 @@ export default defineConfig([
       ],
     },
   },
-  // The step loop and its budgets are plain functions the orchestrator adapter drives.
+  // The orchestrator adapter owns Nest; the step loop and its budgets are plain functions.
   {
     basePath: workspaceRoot,
     files: ['apps/api/src/modules/agent/infrastructure/orchestrator/*.ts'],
@@ -205,7 +205,7 @@ export default defineConfig([
             {
               group: ['@nestjs/*'],
               message:
-                'The step loop stays framework-free; take a StepLogger or a plain function instead.',
+                'The step loop files take a StepLogger or a plain function, never Nest directly.',
             },
           ],
         },
