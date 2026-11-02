@@ -69,6 +69,8 @@ environment variable. Local runs report `0.1.0`.
 | `ai continue clicked`        | Browser, once per Continuar click the client acts on; a click while one runs and a Retry send none                                                                                         | `tier` (`anonymous`, `free`, or `byok`) when today's quota is known, `stop_reason` (`max_steps`, `token_budget`, or `time_limit`) when the answer's stop reason is known |
 | `byok key failed`            | API when a BYOK turn's key is refused by the provider, cannot call the turn's model, or no longer decrypts                                                                                 | `source=api`, `provider`, `kind` (`auth`, `credit`, `permission`, `model`)                                                                                               |
 
+The `token_budget` `stop_reason` covers both the token and the USD budget of a segment; `overCostBudget` on the API's `agent.turn.segment_closed` and `agent.turn.synthesis_unaffordable` logs says whether the USD budget ran out, and both budgets can run out together.
+
 Browser anonymous creation is deliberately browser-authoritative so it retains
 the browser distinct ID and joins the pre-signup funnel. Registered API events
 use the stable database user ID. `shared note viewed` is not emitted when the

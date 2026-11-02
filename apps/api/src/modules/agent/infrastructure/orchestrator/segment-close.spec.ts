@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ModelPricing } from '@knowtis/ai-gateway';
+
 import { firstCallRoom } from '../../domain/first-call-budget';
 import { estimateMessageTokens } from '../../domain/message-tokens';
 import {
@@ -7,8 +9,11 @@ import {
   SYNTHESIS_REQUEST_TOKENS,
 } from '../../domain/synthesis-request';
 import {
+  closingSynthesisCap,
+  costRunsOut,
   nextInputTokens,
   segmentEndAfterToolStep,
+  synthesisCostOutputCap,
   synthesisOutputCap,
   type SegmentState,
 } from './segment-close';
@@ -24,7 +29,36 @@ const ROOMY: SegmentState = {
   now: 0,
   deadlineAt: 300_000,
   reserveMs: 30_000,
+  spentTurnCostUsd: 0,
+  maxTurnCostUsd: Number.POSITIVE_INFINITY,
+  model: 'anthropic:claude-sonnet-5-5',
+  pricing: undefined,
+  cachedInputTokens: 0,
 };
+
+// Powers of two keep the USD sums exact, so a boundary can be asserted to the token.
+const INPUT_RATE = 2 ** -20;
+const OUTPUT_RATE = 2 ** -17;
+const CACHE_READ_RATE = 2 ** -23;
+const PRICING: ModelPricing = {
+  inputCostPerToken: INPUT_RATE,
+  outputCostPerToken: OUTPUT_RATE,
+  cacheReadInputTokenCost: CACHE_READ_RATE,
+};
+const COSTED: SegmentState = {
+  ...ROOMY,
+  completedSteps: 1,
+  spentTurnTokens: 1_000,
+  nextInputTokens: 2_048,
+  synthesisRequestTokens: 64,
+  reserveTokens: 4_096,
+  spentTurnCostUsd: 2 ** -6,
+  pricing: PRICING,
+};
+const COSTED_FIT =
+  COSTED.spentTurnCostUsd +
+  (2 * COSTED.nextInputTokens + COSTED.synthesisRequestTokens) * INPUT_RATE +
+  COSTED.reserveTokens * OUTPUT_RATE;
 
 describe('segmentEndAfterToolStep', () => {
   it('runs another tool step while every limit has room', () => {
@@ -120,6 +154,256 @@ describe('segmentEndAfterToolStep', () => {
     expect(segmentEndAfterToolStep({ ...all, spentTurnTokens: 0 })).toBe(
       'time_limit'
     );
+  });
+});
+
+describe('segmentEndAfterToolStep on the USD budget', () => {
+  it('keeps stepping when one more tool step, the synthesis and the reserve fit exactly', () => {
+    expect(
+      segmentEndAfterToolStep({ ...COSTED, maxTurnCostUsd: COSTED_FIT })
+    ).toBeNull();
+  });
+
+  it('closes on the reported reason once they pass the USD budget, with tokens to spare', () => {
+    expect(
+      segmentEndAfterToolStep({
+        ...COSTED,
+        maxTurnCostUsd: COSTED_FIT - INPUT_RATE,
+      })
+    ).toBe('token_budget');
+  });
+
+  it('prices the next tool step from what the last call left in the cache', () => {
+    const cachedFit =
+      COSTED_FIT - COSTED.nextInputTokens * (INPUT_RATE - CACHE_READ_RATE);
+    const cached = { ...COSTED, cachedInputTokens: COSTED.nextInputTokens };
+
+    expect(
+      segmentEndAfterToolStep({ ...cached, maxTurnCostUsd: cachedFit })
+    ).toBeNull();
+    expect(
+      segmentEndAfterToolStep({
+        ...cached,
+        maxTurnCostUsd: cachedFit - INPUT_RATE,
+      })
+    ).toBe('token_budget');
+  });
+
+  it('never discounts the cache for a provider whose usage is billed at full input', () => {
+    expect(
+      segmentEndAfterToolStep({
+        ...COSTED,
+        model: 'openrouter:anthropic/claude-sonnet-5-5',
+        cachedInputTokens: COSTED.nextInputTokens,
+        maxTurnCostUsd: COSTED_FIT - INPUT_RATE,
+      })
+    ).toBe('token_budget');
+  });
+
+  it.each([
+    { label: 'no pricing', pricing: undefined },
+    { label: 'no token prices', pricing: {} },
+    { label: 'a per-second price only', pricing: { inputCostPerSecond: 1 } },
+  ])('does nothing for a model with $label', ({ pricing }) => {
+    const state = {
+      ...COSTED,
+      pricing,
+      spentTurnCostUsd: 100,
+      maxTurnCostUsd: 0.5,
+    };
+
+    expect(costRunsOut(state)).toBe(false);
+    expect(segmentEndAfterToolStep(state)).toBeNull();
+  });
+
+  it('still ends on tokens for a model with no pricing', () => {
+    expect(
+      segmentEndAfterToolStep({
+        ...COSTED,
+        pricing: undefined,
+        spentTurnTokens: 149_000,
+      })
+    ).toBe('token_budget');
+  });
+
+  it('never ends on USD when the turn is billed to the caller', () => {
+    expect(
+      segmentEndAfterToolStep({
+        ...COSTED,
+        spentTurnCostUsd: 1_000_000,
+        maxTurnCostUsd: Number.POSITIVE_INFINITY,
+      })
+    ).toBeNull();
+  });
+
+  it('checks a model with one token price on the rate it has', () => {
+    expect(
+      costRunsOut({
+        ...COSTED,
+        pricing: { inputCostPerToken: INPUT_RATE },
+        spentTurnCostUsd: 1,
+        maxTurnCostUsd: 0.5,
+      })
+    ).toBe(true);
+  });
+
+  it('closes the segment when the USD spend is not a number', () => {
+    expect(
+      segmentEndAfterToolStep({
+        ...COSTED,
+        spentTurnCostUsd: Number.NaN,
+        maxTurnCostUsd: 0.5,
+      })
+    ).toBe('token_budget');
+  });
+
+  it('prefers USD over time and steps when several fire together', () => {
+    expect(
+      segmentEndAfterToolStep({
+        ...COSTED,
+        completedSteps: 7,
+        now: 290_000,
+        maxTurnCostUsd: COSTED.spentTurnCostUsd,
+      })
+    ).toBe('token_budget');
+  });
+});
+
+describe('synthesisCostOutputCap', () => {
+  const room = 2_048;
+  const synthesisInput = COSTED.nextInputTokens + COSTED.synthesisRequestTokens;
+  const budgetWithRoom = (tokens: number) =>
+    COSTED.spentTurnCostUsd +
+    synthesisInput * INPUT_RATE +
+    tokens * OUTPUT_RATE;
+
+  it('caps the synthesis at the output the USD left after its input buys', () => {
+    expect(
+      synthesisCostOutputCap({
+        ...COSTED,
+        maxTurnCostUsd: budgetWithRoom(room),
+      })
+    ).toBe(room);
+  });
+
+  it('returns 0 when not even the minimum synthesis fits', () => {
+    expect(
+      synthesisCostOutputCap({
+        ...COSTED,
+        maxTurnCostUsd: budgetWithRoom(MIN_SYNTHESIS_OUTPUT_TOKENS - 1),
+      })
+    ).toBe(0);
+    expect(
+      synthesisCostOutputCap({
+        ...COSTED,
+        maxTurnCostUsd: budgetWithRoom(MIN_SYNTHESIS_OUTPUT_TOKENS),
+      })
+    ).toBe(MIN_SYNTHESIS_OUTPUT_TOKENS);
+  });
+
+  it('prices the synthesis input in full, since a tool-less call has no cache to read', () => {
+    expect(
+      synthesisCostOutputCap({
+        ...COSTED,
+        cachedInputTokens: COSTED.nextInputTokens,
+        maxTurnCostUsd: budgetWithRoom(room),
+      })
+    ).toBe(room);
+  });
+
+  it.each([
+    { label: 'no pricing', pricing: undefined },
+    { label: 'no token prices', pricing: {} },
+  ])(
+    'leaves the output to the token budget for a model with $label',
+    ({ pricing }) => {
+      expect(
+        synthesisCostOutputCap({
+          ...COSTED,
+          pricing,
+          spentTurnCostUsd: 100,
+          maxTurnCostUsd: 0.5,
+        })
+      ).toBe(Number.POSITIVE_INFINITY);
+    }
+  );
+
+  it('is unbounded when the turn is billed to the caller', () => {
+    expect(synthesisCostOutputCap(COSTED)).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it('is unbounded by a model whose output is free while the USD has room', () => {
+    expect(
+      synthesisCostOutputCap({
+        ...COSTED,
+        pricing: { inputCostPerToken: INPUT_RATE },
+        maxTurnCostUsd: 1,
+      })
+    ).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it('returns 0 when the USD spend is not a number', () => {
+    expect(
+      synthesisCostOutputCap({
+        ...COSTED,
+        spentTurnCostUsd: Number.NaN,
+        maxTurnCostUsd: 0.5,
+      })
+    ).toBe(0);
+  });
+});
+
+describe('closingSynthesisCap', () => {
+  const synthesisInput = COSTED.nextInputTokens + COSTED.synthesisRequestTokens;
+  const budgetWithRoom = (tokens: number) =>
+    COSTED.spentTurnCostUsd +
+    synthesisInput * INPUT_RATE +
+    tokens * OUTPUT_RATE;
+
+  it('takes the USD room when it is the tighter budget', () => {
+    expect(
+      closingSynthesisCap(
+        { ...COSTED, maxTurnCostUsd: budgetWithRoom(2_048) },
+        8_192
+      )
+    ).toBe(2_048);
+  });
+
+  it('takes the token room when it is the tighter budget', () => {
+    expect(
+      closingSynthesisCap(
+        {
+          ...COSTED,
+          maxTurnTokens: 1_000 + synthesisInput + 1_500,
+          maxTurnCostUsd: budgetWithRoom(2_048),
+        },
+        8_192
+      )
+    ).toBe(1_500);
+  });
+
+  it('never exceeds the per-call output cap', () => {
+    expect(
+      closingSynthesisCap(
+        { ...COSTED, maxTurnCostUsd: budgetWithRoom(16_384) },
+        8_192
+      )
+    ).toBe(8_192);
+  });
+
+  it('is 0 when either budget has no room for a minimal answer', () => {
+    expect(
+      closingSynthesisCap(
+        { ...COSTED, maxTurnCostUsd: budgetWithRoom(1) },
+        8_192
+      )
+    ).toBe(0);
+    expect(
+      closingSynthesisCap(
+        { ...COSTED, maxTurnTokens: 1_000 + synthesisInput + 1 },
+        8_192
+      )
+    ).toBe(0);
   });
 });
 

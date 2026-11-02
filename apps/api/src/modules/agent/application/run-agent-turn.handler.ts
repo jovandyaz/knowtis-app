@@ -1125,6 +1125,9 @@ export class RunAgentTurnHandler {
         model,
         maxSteps: prepared.limits.maxSteps,
         maxTurnTokens: prepared.limits.maxTurnTokens,
+        maxTurnCostUsd: prepared.limits.maxTurnCostUsd,
+        pricingFor: (candidate: string) =>
+          this.modelCatalog.getPricing(candidate),
         effortFor: (candidate: string) =>
           this.effortForModel({
             execution,
@@ -1435,11 +1438,16 @@ export class RunAgentTurnHandler {
     // Resolve turn settings before the budget reservation: a settings-store
     // failure must escape before any reservation exists, else the held
     // reservation leaks with no client-facing error.
+    const allowance = this.rateLimit.dailyAllowance(execution);
     const limits = segmentLimits(execution, {
       maxSteps: this.configService.get('AI_AGENT_MAX_STEPS'),
       byokMaxSteps: this.configService.get('AI_AGENT_BYOK_MAX_STEPS'),
       turnTokenBudget: this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET'),
-      dailyTokenAllowance: this.rateLimit.dailyAllowance(execution).tokenLimit,
+      turnCostBudgetUsd: this.configService.get(
+        'AI_AGENT_TURN_COST_BUDGET_USD'
+      ),
+      dailyTokenAllowance: allowance.tokenLimit,
+      dailyCostAllowanceUsd: allowance.costLimit,
     });
     const firstCall = {
       ...AGENT_FIRST_CALL_COSTS,

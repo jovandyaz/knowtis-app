@@ -36,9 +36,10 @@ import {
 import { fromResponseMessages } from './message-mapper';
 import { ProposalCollector } from './proposal-collector';
 import {
+  closingSynthesisCap,
+  costRunsOut,
   nextInputTokens,
   segmentEndAfterToolStep,
-  synthesisOutputCap,
   type SegmentEnd,
   type SegmentState,
 } from './segment-close';
@@ -59,6 +60,8 @@ import { toToolFreeTranscript } from './tool-free-transcript';
 import {
   accumulateTurnUsage,
   bestEffortUsage,
+  cachedInputTokensOf,
+  callCostUsd,
   hasCompleteUsage,
   turnUsageEvent,
   type StepUsageAccumulator,
@@ -185,6 +188,7 @@ export interface AgentStepLoopParams {
     readonly maxRetries: number;
     readonly maxMs: number;
     readonly maxTurnTokens: number;
+    readonly maxTurnCostUsd: number;
     readonly synthesisReserveTokens: number;
     readonly synthesisReserveMs: number;
     readonly deadlineAt: number;
@@ -248,9 +252,87 @@ export async function* runAgentStepLoop(
   };
   let completedSteps = 0;
   let segmentEnd: SegmentEnd | null = null;
-  let synthesisInputTokens = 0;
+  let nextCallInputTokens = 0;
   let synthesisMaxOutputTokens = params.budgets.maxOutputTokens;
   let unreportedLeakTokens = 0;
+  let spentTurnCostUsd = 0;
+
+  const segmentStateOn = (
+    model: string,
+    steps: number,
+    cachedInputTokens: number
+  ): SegmentState => ({
+    completedSteps: steps,
+    maxSteps: input.maxSteps,
+    spentTurnTokens:
+      turnUsage.inputTokens + turnUsage.outputTokens + unreportedLeakTokens,
+    nextInputTokens: nextCallInputTokens,
+    synthesisRequestTokens: SYNTHESIS_REQUEST_TOKENS,
+    maxTurnTokens: params.budgets.maxTurnTokens,
+    reserveTokens: params.budgets.synthesisReserveTokens,
+    now: Date.now(),
+    deadlineAt: params.budgets.deadlineAt,
+    reserveMs: params.budgets.synthesisReserveMs,
+    spentTurnCostUsd,
+    maxTurnCostUsd: params.budgets.maxTurnCostUsd,
+    model,
+    pricing: input.pricingFor(model),
+    cachedInputTokens,
+  });
+
+  const logSegmentClosed = (
+    state: SegmentState,
+    reason: SegmentEnd,
+    maxOutputTokens: number
+  ) => {
+    logger.log({
+      event: 'agent.turn.segment_closed',
+      userId,
+      model: state.model,
+      reason,
+      overCostBudget: costRunsOut(state),
+      completedSteps: state.completedSteps,
+      spentTurnTokens: state.spentTurnTokens,
+      spentTurnCostUsd: state.spentTurnCostUsd,
+      maxTurnCostUsd: state.maxTurnCostUsd,
+      maxOutputTokens,
+    });
+  };
+
+  // What was reserved on the failed model does not hold at a rescue's prices: it
+  // closes the segment when it cannot afford another tool step, and is passed
+  // over when it cannot afford the synthesis either.
+  const takeAffordableRescue = (): string | undefined => {
+    for (;;) {
+      const candidate = failoverCandidates.shift();
+      if (candidate === undefined) {
+        return undefined;
+      }
+      const state = segmentStateOn(candidate, completedSteps, 0);
+      if (segmentEnd === null && !costRunsOut(state)) {
+        return candidate;
+      }
+      const cap = closingSynthesisCap(state, params.budgets.maxOutputTokens);
+      if (cap > 0) {
+        if (segmentEnd === null) {
+          segmentEnd = AGENT_STOP_REASON.TOKEN_BUDGET;
+          logSegmentClosed(state, segmentEnd, cap);
+        }
+        synthesisMaxOutputTokens = cap;
+        return candidate;
+      }
+      logger.warn({
+        event: 'agent.turn.rescue_unaffordable',
+        userId,
+        model: candidate,
+        spentTurnTokens: state.spentTurnTokens,
+        spentTurnCostUsd: state.spentTurnCostUsd,
+        nextInputTokens: state.nextInputTokens,
+        maxTurnTokens: state.maxTurnTokens,
+        maxTurnCostUsd: state.maxTurnCostUsd,
+      });
+    }
+  };
 
   const failOverTo = async (nextModel: string, reason: string) => {
     params.cooldown.recordFailure(cooldownKeyOf(currentModel));
@@ -344,7 +426,7 @@ export async function* runAgentStepLoop(
             byok,
             failoverCandidates
           )
-            ? failoverCandidates.shift()
+            ? takeAffordableRescue()
             : undefined;
           if (nextModel !== undefined) {
             await failOverTo(nextModel, 'continuation stall');
@@ -409,7 +491,7 @@ export async function* runAgentStepLoop(
               byok,
               failoverCandidates
             )
-              ? failoverCandidates.shift()
+              ? takeAffordableRescue()
               : undefined;
           if (nextModel !== undefined) {
             emitTurnHealth(
@@ -459,6 +541,11 @@ export async function* runAgentStepLoop(
         case STEP_CALL_KIND.LEAKED: {
           if (result.usage) {
             accumulateTurnUsage(turnUsage, result.usage);
+            spentTurnCostUsd += callCostUsd(
+              currentModel,
+              input.pricingFor(currentModel),
+              result.usage
+            );
           }
           logger.warn({
             event: 'agent.turn.markup_leak',
@@ -483,35 +570,28 @@ export async function* runAgentStepLoop(
           // and a provider may report partial counts, so such a leaked call
           // counts as the most it could have spent, on top of what it reported.
           if (!result.usage || !hasCompleteUsage(result.usage)) {
+            const unreportedInputTokens =
+              nextCallInputTokens + SYNTHESIS_REQUEST_TOKENS;
             unreportedLeakTokens +=
-              synthesisInputTokens +
-              SYNTHESIS_REQUEST_TOKENS +
-              synthesisMaxOutputTokens;
+              unreportedInputTokens + synthesisMaxOutputTokens;
+            spentTurnCostUsd += callCostUsd(
+              currentModel,
+              input.pricingFor(currentModel),
+              {
+                inputTokens: unreportedInputTokens,
+                outputTokens: synthesisMaxOutputTokens,
+              }
+            );
           }
-          const rescueCap = synthesisOutputCap(
-            {
-              spentTurnTokens:
-                turnUsage.inputTokens +
-                turnUsage.outputTokens +
-                unreportedLeakTokens,
-              nextInputTokens: synthesisInputTokens,
-              synthesisRequestTokens: SYNTHESIS_REQUEST_TOKENS,
-              maxTurnTokens: params.budgets.maxTurnTokens,
-            },
-            params.budgets.maxOutputTokens
-          );
-          const nextModel =
-            rescueCap > 0 &&
-            eligibleForStepFailover(
-              nothingStreamed,
-              completedSteps,
-              byok,
-              failoverCandidates
-            )
-              ? failoverCandidates.shift()
-              : undefined;
+          const nextModel = eligibleForStepFailover(
+            nothingStreamed,
+            completedSteps,
+            byok,
+            failoverCandidates
+          )
+            ? takeAffordableRescue()
+            : undefined;
           if (nextModel !== undefined) {
-            synthesisMaxOutputTokens = rescueCap;
             await failOverTo(nextModel, 'tool markup leak');
             failedOver = true;
             break stepAttempts;
@@ -524,6 +604,11 @@ export async function* runAgentStepLoop(
         }
         case STEP_CALL_KIND.COMPLETED: {
           accumulateTurnUsage(turnUsage, result.usage);
+          spentTurnCostUsd += callCostUsd(
+            currentModel,
+            input.pricingFor(currentModel),
+            result.usage
+          );
           if (!hasCompleteUsage(result.usage)) {
             logger.warn({
               event: 'agent.turn.usage_incomplete',
@@ -560,8 +645,6 @@ export async function* runAgentStepLoop(
             return;
           }
           readBeforeThisStep.push(...stepRows);
-          const spentTurnTokens =
-            turnUsage.inputTokens + turnUsage.outputTokens;
           const wantsMoreTools =
             result.finishReason === FINISH_REASON_TOOL_CALLS;
           const stepNumber = completedSteps + 1;
@@ -570,27 +653,21 @@ export async function* runAgentStepLoop(
             segmentEnd === null &&
             stepNumber < input.maxSteps
           ) {
-            const state: SegmentState = {
-              completedSteps: stepNumber,
-              maxSteps: input.maxSteps,
-              spentTurnTokens,
-              nextInputTokens: nextInputTokens(
-                result.usage.inputTokens,
-                result.usage.outputTokens,
-                stepRows
-              ),
-              synthesisRequestTokens: SYNTHESIS_REQUEST_TOKENS,
-              maxTurnTokens: params.budgets.maxTurnTokens,
-              reserveTokens: params.budgets.synthesisReserveTokens,
-              now: Date.now(),
-              deadlineAt: params.budgets.deadlineAt,
-              reserveMs: params.budgets.synthesisReserveMs,
-            };
+            nextCallInputTokens = nextInputTokens(
+              result.usage.inputTokens,
+              result.usage.outputTokens,
+              stepRows
+            );
+            const state = segmentStateOn(
+              currentModel,
+              stepNumber,
+              cachedInputTokensOf(result.usage)
+            );
             const end = segmentEndAfterToolStep(state);
             const cap =
               end === null
                 ? 0
-                : synthesisOutputCap(state, params.budgets.maxOutputTokens);
+                : closingSynthesisCap(state, params.budgets.maxOutputTokens);
             if (end === null || cap > 0) {
               emitTurnHealth(
                 logger,
@@ -604,17 +681,8 @@ export async function* runAgentStepLoop(
               history.push(...stepMessages);
               if (end !== null) {
                 segmentEnd = end;
-                synthesisInputTokens = state.nextInputTokens;
                 synthesisMaxOutputTokens = cap;
-                logger.log({
-                  event: 'agent.turn.segment_closed',
-                  userId,
-                  model: currentModel,
-                  reason: end,
-                  completedSteps: stepNumber,
-                  spentTurnTokens,
-                  maxOutputTokens: cap,
-                });
+                logSegmentClosed(state, end, cap);
               }
               advanceToNextStep = true;
               break stepAttempts;
@@ -624,9 +692,12 @@ export async function* runAgentStepLoop(
               userId,
               model: currentModel,
               reason: end,
-              spentTurnTokens,
+              overCostBudget: costRunsOut(state),
+              spentTurnTokens: state.spentTurnTokens,
+              spentTurnCostUsd: state.spentTurnCostUsd,
               nextInputTokens: state.nextInputTokens,
               maxTurnTokens: params.budgets.maxTurnTokens,
+              maxTurnCostUsd: params.budgets.maxTurnCostUsd,
             });
             segmentEnd = end;
           }

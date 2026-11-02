@@ -117,6 +117,7 @@ function setup() {
     turnSettings: NO_TURN_SETTINGS,
     maxSteps: 2,
     maxTurnTokens: 10_000,
+    maxTurnCostUsd: Number.POSITIVE_INFINITY,
   });
   return { model, harness, chain };
 }
@@ -175,6 +176,7 @@ describe('production parity of an eval turn', () => {
         },
         maxSteps: 2,
         maxTurnTokens: 10_000,
+        maxTurnCostUsd: Number.POSITIVE_INFINITY,
       });
 
       await harness.runCase('hello', 'empty', MODEL);
@@ -217,6 +219,7 @@ describe('per-case step cap', () => {
       turnSettings: NO_TURN_SETTINGS,
       maxSteps: 8,
       maxTurnTokens: 10_000,
+      maxTurnCostUsd: Number.POSITIVE_INFINITY,
     });
   }
 
@@ -258,6 +261,7 @@ describe('recalled memories', () => {
       turnSettings: NO_TURN_SETTINGS,
       maxSteps: 8,
       maxTurnTokens: 10_000,
+      maxTurnCostUsd: Number.POSITIVE_INFINITY,
     });
   }
 

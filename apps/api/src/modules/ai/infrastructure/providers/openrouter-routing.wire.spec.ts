@@ -176,6 +176,8 @@ describe('OpenRouter routing on the real AI SDK wire', () => {
       model: PRIMARY,
       maxSteps: 3,
       maxTurnTokens: 10_000,
+      maxTurnCostUsd: Number.POSITIVE_INFINITY,
+      pricingFor: () => undefined,
       openrouterProviderOrder: await routing.getOpenRouterProviderOrder(),
       openrouterIgnoredProviders: await routing.getOpenRouterIgnoredProviders(),
     })) {
@@ -249,6 +251,8 @@ describe('OpenRouter routing on the real AI SDK wire', () => {
           model: PRIMARY,
           maxSteps: 3,
           maxTurnTokens: 1_000,
+          maxTurnCostUsd: Number.POSITIVE_INFINITY,
+          pricingFor: () => undefined,
           openrouterProviderOrder: await routing.getOpenRouterProviderOrder(),
           openrouterIgnoredProviders:
             await routing.getOpenRouterIgnoredProviders(),
