@@ -10,8 +10,8 @@
     "integrity": "sha256-91ccfb9a815b1a2681a017ad25bb592eb586a36b3ff9a22a54cd1b4b8cd7d685"
   },
   "building-copilot-features": {
-    "source": "domain@0.4.0",
-    "revision": "63899f8db8dede0760095749e1447239ff0a3b4d",
-    "integrity": "sha256-c35da8105382437fe8dcc17ff8d6a03b9a64f369252decc61385899bf8602b60"
+    "source": "domain@0.4.1",
+    "revision": "35ade59e88884483f245b42f88d6e4c537b5f987",
+    "integrity": "sha256-3d04502ad01b786baa9bea1562cf792336b66d703f0490713df33af7856ab414"
   }
 }
