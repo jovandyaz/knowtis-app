@@ -2,7 +2,7 @@ import {
   detectAiInput,
   MAX_GUARD_INPUT_CHARS,
   MAX_GUARD_SCAN_CHARS,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import { toModelMessages } from '../infrastructure/orchestrator/message-mapper';

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-01. Retroactive: it records a decision taken in stages, whose main technical step was [#157](https://github.com/jovandyaz/knowtis-app/pull/157).
-- **Scope:** the fallback chain, per-step failover and budgets in `packages/ai-gateway` and `apps/api/src/modules/{ai,agent}`.
+- **Scope:** the fallback chain, per-step failover and budgets in `packages/llm-router` and `apps/api/src/modules/{ai,agent}`.
 
 No comparison of alternatives was written down when the decision was made. The options below are assessed with what is known on the date of this record, not what was known then.
 
@@ -16,7 +16,7 @@ A gateway that works per HTTP request sees one call at a time. It cannot tell wh
 
 Keep routing in-process, built on the Vercel AI SDK:
 
-- `@jovandyaz/ai-gateway` owns the fallback chain and provider cooldowns.
+- `@jovandyaz/llm-router` owns the fallback chain and provider cooldowns.
 - The agent module owns the step loop: one `streamText` call per step, each with its own time-to-first-token and silence budgets.
 - A failing first step moves to the next candidate through the chain. A continuation step gets a bounded retry on its own model. If it stays silent or errors before streaming anything, it moves on too, replaying the threaded history without re-running tools.
 

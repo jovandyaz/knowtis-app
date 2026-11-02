@@ -3,7 +3,7 @@ import {
   MODEL_CATALOG,
   type AiInputDisposition,
   type ModelCatalog,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 

@@ -1,4 +1,4 @@
-import type { IndexedModel, IndexProvider } from '@jovandyaz/ai-gateway';
+import type { IndexedModel, IndexProvider } from '@jovandyaz/llm-router';
 
 export const MODEL_INDEX_REPOSITORY = Symbol('MODEL_INDEX_REPOSITORY');
 

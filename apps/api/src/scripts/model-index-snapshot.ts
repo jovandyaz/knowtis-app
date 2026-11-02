@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-import type { IndexedModel, ModelIndexCatalog } from '@jovandyaz/ai-gateway';
+import type { IndexedModel, ModelIndexCatalog } from '@jovandyaz/llm-router';
 
 import { unservedFloorModels } from '../modules/ai/domain/model-catalog/floor-models';
 import type { ModelsDevCatalog } from '../modules/ai/domain/ports/models-dev.port';
@@ -13,7 +13,7 @@ export const SNAPSHOT_HEADER =
 /** The vendored snapshot module the refresh script rewrites. */
 export const SNAPSHOT_PATH = resolve(
   __dirname,
-  '../../../../packages/ai-gateway/src/catalog/model-index.snapshot.ts'
+  '../../../../packages/llm-router/src/catalog/model-index.snapshot.ts'
 );
 
 /**

@@ -1,4 +1,4 @@
-import { detectPromptInjection } from '@jovandyaz/ai-gateway';
+import { detectPromptInjection } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import { htmlToMarkdown, markdownToHtml } from '@knowtis/note-markdown';

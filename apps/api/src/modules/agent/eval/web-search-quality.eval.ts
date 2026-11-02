@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 
-import { MODEL_CATALOG, type ModelCatalog } from '@jovandyaz/ai-gateway';
+import { MODEL_CATALOG, type ModelCatalog } from '@jovandyaz/llm-router';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { config as loadEnv } from 'dotenv';

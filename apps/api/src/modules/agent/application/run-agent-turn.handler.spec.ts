@@ -4,7 +4,7 @@ import {
   estimateTokenCount,
   MAX_GUARD_INPUT_CHARS,
   providerOf,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EventEmitter2 } from '@nestjs/event-emitter';

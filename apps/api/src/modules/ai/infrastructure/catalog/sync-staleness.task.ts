@@ -1,4 +1,4 @@
-import { OPENROUTER_PROVIDER } from '@jovandyaz/ai-gateway';
+import { OPENROUTER_PROVIDER } from '@jovandyaz/llm-router';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 

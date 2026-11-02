@@ -1,4 +1,4 @@
-import { providerOf } from '@jovandyaz/ai-gateway';
+import { providerOf } from '@jovandyaz/llm-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';

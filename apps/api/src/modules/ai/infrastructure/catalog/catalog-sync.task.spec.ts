@@ -4,7 +4,7 @@ import {
   MODELS_DEV_PROVIDERS,
   OPENROUTER_PROVIDER,
   type IndexedModel,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

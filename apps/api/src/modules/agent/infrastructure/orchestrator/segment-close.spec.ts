@@ -1,4 +1,4 @@
-import type { ModelPricing } from '@jovandyaz/ai-gateway';
+import type { ModelPricing } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import { firstCallRoom } from '../../domain/first-call-budget';

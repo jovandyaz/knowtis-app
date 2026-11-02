@@ -1,4 +1,4 @@
-import { MODEL_INDEX_SNAPSHOT, ModelIndexCatalog } from '@jovandyaz/ai-gateway';
+import { MODEL_INDEX_SNAPSHOT, ModelIndexCatalog } from '@jovandyaz/llm-router';
 
 const SNAPSHOT_CATALOG = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
 

@@ -1,4 +1,4 @@
-import type { IndexedModel, ModelIndexCatalog } from '@jovandyaz/ai-gateway';
+import type { IndexedModel, ModelIndexCatalog } from '@jovandyaz/llm-router';
 
 import {
   BYOK_PROVIDERS,

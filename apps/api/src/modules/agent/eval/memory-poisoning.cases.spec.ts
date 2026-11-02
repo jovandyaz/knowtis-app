@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 
-import { MODEL_CATALOG } from '@jovandyaz/ai-gateway';
+import { MODEL_CATALOG } from '@jovandyaz/llm-router';
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { Assertion } from 'promptfoo';

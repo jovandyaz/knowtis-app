@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 
-import { MODEL_CATALOG } from '@jovandyaz/ai-gateway';
 import { TokenHasher } from '@jovandyaz/auth-nestjs';
+import { MODEL_CATALOG } from '@jovandyaz/llm-router';
 import { CacheModule } from '@nestjs/cache-manager';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';

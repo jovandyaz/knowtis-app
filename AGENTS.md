@@ -6,8 +6,8 @@ Run tasks through `pnpm nx`; pnpm is the only package manager.
 
 - No backwards-compatibility hacks: no legacy shims, compat re-exports or "old key" comments. When something is renamed or moved, update every consumer.
 - A package's root `index.ts` is its public API and the only barrel that belongs. Inside an app or package, import from the file that defines the symbol. Do not add `index.ts` barrels; if a change would extend one, point its consumers at the source files and delete it (barrels breed circular dependencies between NestJS providers, defeat Vite tree-shaking and slow its dev server). Never re-export a symbol another package or folder owns.
-- The auth, permissions, email and ai-gateway packages are `@jovandyaz/*` only: there is no `@knowtis/auth`, `@knowtis/permissions`, `@knowtis/email` or `@knowtis/ai-gateway`. Everything else is `@knowtis/*`.
-- `packages/shared/*` and `packages/ai-gateway` have no workspace dependencies by design; lint rejects them, and rejects NestJS and the AI SDK in `ai-gateway`.
+- The auth, permissions, email and llm-router packages are `@jovandyaz/*` only: there is no `@knowtis/auth`, `@knowtis/permissions`, `@knowtis/email` or `@knowtis/llm-router`. Everything else is `@knowtis/*`.
+- `packages/shared/*` and `packages/llm-router` have no workspace dependencies by design; lint rejects them, and rejects NestJS and the AI SDK in `llm-router`.
 - Comments only state a non-obvious why; `knowtis/minimal-comments` flags the rest.
 - UI is mobile-first: build and check the mobile viewport first, then add breakpoints. Prefer `@knowtis/design-system` components over raw elements.
 

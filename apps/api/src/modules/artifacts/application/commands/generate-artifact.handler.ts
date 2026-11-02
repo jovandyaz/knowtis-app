@@ -1,4 +1,4 @@
-import { estimateTokenCount, sanitizeContent } from '@jovandyaz/ai-gateway';
+import { estimateTokenCount, sanitizeContent } from '@jovandyaz/llm-router';
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';

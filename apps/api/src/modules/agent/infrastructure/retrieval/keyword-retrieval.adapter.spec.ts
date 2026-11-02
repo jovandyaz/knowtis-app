@@ -1,4 +1,4 @@
-import { detectPromptInjection } from '@jovandyaz/ai-gateway';
+import { detectPromptInjection } from '@jovandyaz/llm-router';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';

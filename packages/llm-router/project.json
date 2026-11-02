@@ -1,21 +1,21 @@
 {
-  "name": "ai-gateway",
+  "name": "llm-router",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "packages/ai-gateway/src",
+  "sourceRoot": "packages/llm-router/src",
   "projectType": "library",
   "tags": ["type:util", "scope:api"],
   "targets": {
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "packages/ai-gateway",
+        "cwd": "packages/llm-router",
         "command": "eslint src"
       }
     },
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "packages/ai-gateway",
+        "cwd": "packages/llm-router",
         "command": "vitest run --passWithNoTests"
       }
     },

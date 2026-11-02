@@ -4,7 +4,7 @@ import {
   computeTokenCostUsd,
   MODEL_CATALOG,
   type ModelCatalog,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType } from 'zod';

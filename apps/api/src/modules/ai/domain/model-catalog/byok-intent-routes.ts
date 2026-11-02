@@ -1,4 +1,4 @@
-import type { IndexedModel } from '@jovandyaz/ai-gateway';
+import type { IndexedModel } from '@jovandyaz/llm-router';
 
 import {
   BYOK_PROVIDERS,

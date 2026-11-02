@@ -1,4 +1,4 @@
-import { detectPromptInjection } from '@jovandyaz/ai-gateway';
+import { detectPromptInjection } from '@jovandyaz/llm-router';
 import { Inject, Injectable } from '@nestjs/common';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';

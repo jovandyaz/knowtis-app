@@ -1,6 +1,6 @@
 # Agent Module (Copilot)
 
-Server-authoritative conversational copilot built on the AI Gateway. Runs a tool-use loop over the user's notes (and the web), proposes mutations behind human-in-the-loop (HITL) approval, persists conversation threads, and injects hybrid retrieval + long-term memory as context.
+Server-authoritative conversational copilot built on `@jovandyaz/llm-router`. Runs a tool-use loop over the user's notes (and the web), proposes mutations behind human-in-the-loop (HITL) approval, persists conversation threads, and injects hybrid retrieval + long-term memory as context.
 
 It follows the same DDD layering as the rest of `apps/api` (`domain/` → `application/` → `infrastructure/`) and talks to the frontend over a Socket.IO gateway. For end-to-end feature detail (memory A6a/A6b, hybrid retrieval, web search, BYOK, model selection) see [docs/AI.md](../../../../../docs/AI.md) — this README is the module map, not a duplicate of it.
 

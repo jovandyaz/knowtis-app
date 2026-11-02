@@ -1,4 +1,4 @@
-import { providerOf } from '@jovandyaz/ai-gateway';
+import { providerOf } from '@jovandyaz/llm-router';
 
 import { BYOK_PROVIDERS, type ByokProvider } from '@knowtis/shared-types';
 

@@ -5,7 +5,7 @@ import {
   type ModelCatalog,
   type ModelContextWindow,
   type ModelPricing,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 

@@ -3,7 +3,7 @@ import {
   providerOf,
   type ModelCatalog,
   type ModelIndexCatalog,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Inject, Injectable } from '@nestjs/common';
 
 import {

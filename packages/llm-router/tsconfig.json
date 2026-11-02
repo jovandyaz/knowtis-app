@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "../../dist/packages/ai-gateway"
+    "outDir": "../../dist/packages/llm-router"
   },
   "include": ["src/**/*.ts"]
 }

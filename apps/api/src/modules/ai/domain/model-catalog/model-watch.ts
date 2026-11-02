@@ -1,4 +1,4 @@
-import { OPENROUTER_PROVIDER, type IndexedModel } from '@jovandyaz/ai-gateway';
+import { OPENROUTER_PROVIDER, type IndexedModel } from '@jovandyaz/llm-router';
 
 import {
   BYOK_PROVIDERS,

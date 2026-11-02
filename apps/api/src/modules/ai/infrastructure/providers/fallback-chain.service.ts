@@ -3,7 +3,7 @@ import {
   providerOf,
   resolveChainCandidates,
   type ChainScope,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import {
   Inject,
   Injectable,

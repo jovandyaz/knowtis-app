@@ -1,12 +1,12 @@
-import { detectPromptInjection } from '@jovandyaz/ai-gateway';
+import { detectPromptInjection } from '@jovandyaz/llm-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { InjectionClassifierService } from '../../ai/application/services/injection-classifier.service';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { InjectionGuardService } from './injection-guard.service';
 
-vi.mock('@jovandyaz/ai-gateway', async (importActual) => ({
-  ...(await importActual<typeof import('@jovandyaz/ai-gateway')>()),
+vi.mock('@jovandyaz/llm-router', async (importActual) => ({
+  ...(await importActual<typeof import('@jovandyaz/llm-router')>()),
   detectPromptInjection: vi.fn(),
 }));
 

@@ -1,4 +1,4 @@
-import { computeTokenCostUsd, type ModelPricing } from '@jovandyaz/ai-gateway';
+import { computeTokenCostUsd, type ModelPricing } from '@jovandyaz/llm-router';
 
 interface TokenUsageInput {
   readonly inputTokens: number;

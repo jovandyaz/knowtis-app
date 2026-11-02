@@ -1,4 +1,4 @@
-import { detectPromptInjection } from '@jovandyaz/ai-gateway';
+import { detectPromptInjection } from '@jovandyaz/llm-router';
 
 import type { WebSearchHit } from '../../domain/ports/web-search.port';
 

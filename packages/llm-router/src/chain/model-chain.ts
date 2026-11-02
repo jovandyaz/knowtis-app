@@ -1,4 +1,4 @@
-import type { GatewayLogger } from '../logger';
+import type { RouterLogger } from '../logger';
 import type { ProviderCooldown } from './provider-cooldown.tracker';
 
 /**
@@ -20,7 +20,7 @@ export interface ChainResolutionInput {
 
 export interface ChainContext {
   readonly candidates: readonly string[];
-  readonly logger: GatewayLogger;
+  readonly logger: RouterLogger;
   readonly cooldown?: ProviderCooldown | undefined;
 }
 
@@ -243,7 +243,7 @@ function isConfigClassError(error: unknown): boolean {
 }
 
 function logChainStep(
-  logger: GatewayLogger,
+  logger: RouterLogger,
   failedModel: string,
   nextModel: string | undefined,
   error: unknown

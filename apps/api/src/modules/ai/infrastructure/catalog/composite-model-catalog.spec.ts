@@ -1,4 +1,4 @@
-import { MODEL_CATALOG, type IndexedModel } from '@jovandyaz/ai-gateway';
+import { MODEL_CATALOG, type IndexedModel } from '@jovandyaz/llm-router';
 import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';

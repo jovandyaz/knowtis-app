@@ -1,4 +1,4 @@
-import { MAX_GUARD_INPUT_CHARS } from '@jovandyaz/ai-gateway';
+import { MAX_GUARD_INPUT_CHARS } from '@jovandyaz/llm-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';

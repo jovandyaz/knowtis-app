@@ -1,4 +1,4 @@
-import type { GatewayLogger } from '../logger';
+import type { RouterLogger } from '../logger';
 
 export interface CooldownConfig {
   readonly allowedFails: number;
@@ -33,12 +33,12 @@ const DEFAULT_WINDOW_SECONDS = 60;
 export class ProviderCooldownTracker implements ProviderCooldown {
   private readonly states = new Map<string, ProviderState>();
   private readonly config: CooldownConfig;
-  private readonly logger: GatewayLogger | undefined;
+  private readonly logger: RouterLogger | undefined;
   private readonly now: () => number;
 
   constructor(
     config: CooldownConfig,
-    logger?: GatewayLogger,
+    logger?: RouterLogger,
     now: () => number = () => Date.now()
   ) {
     this.config = config;

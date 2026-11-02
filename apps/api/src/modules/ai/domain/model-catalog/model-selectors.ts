@@ -5,7 +5,7 @@ import {
   type IndexProvider,
   type MODELS_DEV_PROVIDERS,
   type ModelStatus,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 
 import {
   MODEL_INTENTS,

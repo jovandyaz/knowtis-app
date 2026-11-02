@@ -7,7 +7,7 @@ import {
   type IndexedModel,
   type IndexProvider,
   type ModelsDevEnrichment,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

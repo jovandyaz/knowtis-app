@@ -1,4 +1,4 @@
-export type { GatewayLogger } from './logger';
+export type { RouterLogger } from './logger';
 export {
   detectPromptInjection,
   MAX_GUARD_INPUT_CHARS,

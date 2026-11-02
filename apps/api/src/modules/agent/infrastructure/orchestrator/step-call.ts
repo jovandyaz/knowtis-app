@@ -1,4 +1,4 @@
-import { isOverloadedError } from '@jovandyaz/ai-gateway';
+import { isOverloadedError } from '@jovandyaz/llm-router';
 import {
   isStepCount,
   streamText,

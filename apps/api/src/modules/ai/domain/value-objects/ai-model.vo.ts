@@ -1,4 +1,4 @@
-import type { ModelCatalog } from '@jovandyaz/ai-gateway';
+import type { ModelCatalog } from '@jovandyaz/llm-router';
 import { err, ok, type Result } from 'neverthrow';
 
 import { AIErrors, type AIDomainError } from '../errors/ai.errors';

@@ -2,7 +2,7 @@ import {
   ModelIndexCatalog,
   type IndexedModel,
   type IndexProvider,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 
 import { floorModelsLost } from './floor-models';
 

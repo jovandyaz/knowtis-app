@@ -3,7 +3,7 @@ import {
   MODEL_INDEX_SNAPSHOT,
   type IndexedModel,
   type IndexProvider,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';

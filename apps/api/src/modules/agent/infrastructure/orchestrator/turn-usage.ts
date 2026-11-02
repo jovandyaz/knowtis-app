@@ -1,4 +1,4 @@
-import type { ModelPricing } from '@jovandyaz/ai-gateway';
+import type { ModelPricing } from '@jovandyaz/llm-router';
 import type { LanguageModelUsage } from 'ai';
 
 import { TokenUsage } from '../../../ai/domain/value-objects/token-usage.vo';
