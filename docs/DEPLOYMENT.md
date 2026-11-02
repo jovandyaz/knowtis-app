@@ -48,6 +48,7 @@ That script starts the deploy detached and then polls until the deployment reach
 | `.github/workflows/nightly-eval.yml`   | Weekly AI eval run of the reference and the served models (no deploy)                                                                                                                                                                                      |
 | `.github/workflows/storybook.yml`      | Publishes the design system Storybook to GitHub Pages when its inputs change on `main`                                                                                                                                                                     |
 | `.github/workflows/model-gate.yml`     | Daily eval gate that activates or fails pending platform model candidates (no deploy)                                                                                                                                                                      |
+| `.github/workflows/pr-eval.yml`        | One trial of the injection guard eval on same-repo PRs touching the agent or `ai-gateway` (no deploy, no merge block)                                                                                                                                      |
 
 **Required GitHub secrets/variables:**
 
@@ -60,7 +61,7 @@ That script starts the deploy detached and then polls until the deployment reach
 | `VERCEL_ORG_ID`                | Secret   | Vercel org/team ID                                                                                                                                                                    |
 | `VERCEL_PROJECT_ID`            | Secret   | Vercel project ID (notes frontend)                                                                                                                                                    |
 | `VERCEL_PROJECT_ID_BACKOFFICE` | Secret   | Vercel project ID (`knowtis-backoffice`)                                                                                                                                              |
-| `ANTHROPIC_API_KEY`            | Secret   | AI evals (`nightly-eval.yml`, `model-gate.yml`): the rubric judge; funded account required                                                                                            |
+| `ANTHROPIC_API_KEY`            | Secret   | AI evals (`nightly-eval.yml`, `model-gate.yml`, `pr-eval.yml`): the rubric judge; funded account required                                                                             |
 | `OPENROUTER_API_KEY`           | Secret   | AI evals of `openrouter:*` models, every gate candidate included                                                                                                                      |
 | `KNOWTIS_API_URL`              | Secret   | API origin, no trailing slash and no `/api/v1`, for the model gate and the weekly evals' served models                                                                                |
 | `MODEL_GATE_TOKEN`             | Secret   | Same value as the API's `MODEL_GATE_TOKEN`; without it and `KNOWTIS_API_URL` the gate gates nothing and the weekly evals fall back to the `AI_EVAL_*_MODEL` variables, then the seeds |

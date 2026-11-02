@@ -1426,8 +1426,11 @@ pnpm nx run api:eval
 ```
 
 - **Gated:** each suite self-skips when its own provider key is unset, so a run with no
-  provider keys skips cleanly (exit 0). It is opt-in and excluded from CI and
-  `nx affected` (paid + non-deterministic).
+  provider keys skips cleanly (exit 0). It is opt-in and excluded from `nx affected` (paid +
+  non-deterministic). CI runs it only in `nightly-eval.yml`, `model-gate.yml` and `pr-eval.yml`.
+  `pr-eval.yml` runs one trial of the injection guard suite against the default eval model on
+  same-repo PRs touching the agent or `ai-gateway`. It catches guard and prompt regressions, not
+  attacks that depend on a served model, and it does not block merge.
 - **Prerequisites:** `pnpm docker:up` running, plus `ANTHROPIC_API_KEY` in `apps/api/.env` for the
   Anthropic-gated suites (without it they skip and the command still exits 0) — the
   harness boots the real module graph, whose `onModuleInit` hooks reach Postgres/Redis.
