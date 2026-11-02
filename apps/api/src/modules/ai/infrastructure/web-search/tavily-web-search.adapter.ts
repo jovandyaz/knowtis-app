@@ -1,15 +1,14 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { TavilyWebSearch } from '@knowtis/ai-gateway';
+import type { EnvConfig } from '../../../../config/env.config';
 import type {
   WebFetchResult,
   WebSearchOptions,
+  WebSearchPort,
   WebSearchResult,
-} from '@knowtis/ai-gateway';
-
-import type { EnvConfig } from '../../../../config/env.config';
-import type { WebSearchPort } from '../../domain/ports/web-search.port';
+} from '../../domain/ports/web-search.port';
+import { TavilyWebSearch } from './tavily-web-search';
 
 @Injectable()
 export class TavilyWebSearchAdapter implements WebSearchPort, OnModuleInit {

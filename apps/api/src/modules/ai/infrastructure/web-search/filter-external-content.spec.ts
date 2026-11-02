@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { WebSearchHit } from '../../domain/ports/web-search.port';
 import { filterExternalHits, isHttpUrl } from './filter-external-content';
-import type { WebSearchHit } from './web-search.types';
 
 const hit = (over: Partial<WebSearchHit>): WebSearchHit => ({
   title: 'T',

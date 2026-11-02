@@ -97,7 +97,7 @@ apps/api/src/modules/agent/      # Copilot — see apps/api/src/modules/agent/RE
 apps/api/src/modules/organization/  # POST /ai/organization/suggest
 
 packages/ai-gateway/src/         # @knowtis/ai-gateway — see packages/ai-gateway/README.md
-├── catalog/  chain/  guard/  tokens/  web-search/
+├── catalog/  chain/  guard/  tokens/
 └── logger.ts
 
 apps/notes/src/

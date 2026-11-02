@@ -16,6 +16,9 @@ import minimalComments from './tools/lint-rules/minimal-comments.js';
 // `packages/**` matching when a project lints from its own directory.
 const workspaceRoot = import.meta.dirname;
 
+const WORKSPACE_PACKAGES = ['@knowtis/*', '@jovandyaz/*'];
+const ISOLATED_PACKAGE =
+  'This package has no workspace dependencies by design: move the shared code down, not this import in.';
 const BROWSER_SOURCES = [
   'apps/notes/**/*.{ts,tsx}',
   'apps/backoffice/**/*.{ts,tsx}',
@@ -181,6 +184,38 @@ export default defineConfig([
             {
               name: '@jovandyaz/auth/server',
               message: 'Node-only entry; browser code imports @jovandyaz/auth.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // Nx tags allow util→util, so only this stops these packages depending on the workspace.
+  {
+    basePath: workspaceRoot,
+    files: ['packages/shared/*/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [{ group: WORKSPACE_PACKAGES, message: ISOLATED_PACKAGE }],
+        },
+      ],
+    },
+  },
+  {
+    basePath: workspaceRoot,
+    files: ['packages/ai-gateway/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            { group: WORKSPACE_PACKAGES, message: ISOLATED_PACKAGE },
+            {
+              group: ['@nestjs/*', 'ai', '@ai-sdk/*'],
+              message:
+                'ai-gateway stays free of frameworks and SDKs; callers pass the model call in as a function.',
             },
           ],
         },
