@@ -1,0 +1,88 @@
+name: PR Evals
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/modules/agent/**'
+      - 'packages/ai-gateway/**'
+      - '.github/workflows/pr-eval.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-evals-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  injection-guard:
+    name: Injection guard (informational)
+    # Forks get no secrets, so there is nothing to run for them.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    # One trial is noisy, so a red run informs the author without blocking merge.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: knowtis_eval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/knowtis_eval
+      # Throwaway values: the harness validates env shape only, never issues real tokens.
+      JWT_SECRET: pr-eval-jwt-secret-00000000000000000000000
+      JWT_REFRESH_SECRET: pr-eval-jwt-refresh-secret-1111111111111
+      TOKEN_HASH_KEY: bmlnaHRseS1ldmFsLXRva2VuLWhhc2gta2V5LTMyYiE=
+      AI_EVAL_TRIALS: 1
+      AI_EVAL_OUTPUT_DIR: ${{ github.workspace }}/eval-results
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Fail fast if the provider key is missing
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set — the eval would silently skip."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: npx nx db:migrate:run api
+
+      - name: Run the injection guard eval
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npx nx run api:eval-injection-guard
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr-eval-results
+          path: eval-results
+          retention-days: 14
+          # A run without results graded nothing; never let it read as clean.
+          if-no-files-found: error
