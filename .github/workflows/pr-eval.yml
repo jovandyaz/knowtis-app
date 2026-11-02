@@ -24,6 +24,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       postgres:
         image: pgvector/pgvector:pg16
         env:
@@ -39,6 +48,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/knowtis_eval
+      REDIS_URL: redis://127.0.0.1:6379
       # Throwaway values: the harness validates env shape only, never issues real tokens.
       JWT_SECRET: pr-eval-jwt-secret-00000000000000000000000
       JWT_REFRESH_SECRET: pr-eval-jwt-refresh-secret-1111111111111
