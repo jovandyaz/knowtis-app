@@ -62,7 +62,9 @@ describe('ErrorScrubbingSpanProcessor', () => {
     ).rejects.toThrow('refused');
 
     const spans = await exported();
-    expect(spans.length).toBeGreaterThan(0);
+    expect(spans.map((span) => span.status.code)).toContain(
+      SpanStatusCode.ERROR
+    );
     expect(JSON.stringify(spans.map(serialize))).not.toContain('sk-or-');
   });
 

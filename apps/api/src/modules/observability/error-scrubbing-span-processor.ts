@@ -36,7 +36,7 @@ function scrubbed(span: tracing.ReadableSpan): tracing.ReadableSpan {
  * `recordInputs: false` only covers prompts and completions. The AI SDK still
  * copies a failed call's message and stack into the span, and providers echo
  * prompts and key fragments there, so spans leave with the error type alone.
- * The full message stays in our own logs, redacted for BYOK.
+ * Platform failures keep the message in our own logs; BYOK logs a fixed string.
  */
 export class ErrorScrubbingSpanProcessor implements tracing.SpanProcessor {
   constructor(private readonly next: tracing.SpanProcessor) {}
