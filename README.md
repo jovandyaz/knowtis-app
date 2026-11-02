@@ -65,7 +65,6 @@ libs/
   data-access/    React Query hooks and Zod schemas, per domain
   authorization/  CASL permission definitions shared by frontend and backend
 packages/
-  llm-router/     Framework-free AI core: provider fallback, injection guard, token costing
   crdt/           Yjs helpers
   editor/         Tiptap editor and schema
   design-system/  UI components and design tokens

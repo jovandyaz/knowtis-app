@@ -96,9 +96,7 @@ apps/api/src/modules/ai/
 apps/api/src/modules/agent/      # Copilot — see apps/api/src/modules/agent/README.md
 apps/api/src/modules/organization/  # POST /ai/organization/suggest
 
-packages/llm-router/src/         # @jovandyaz/llm-router — see packages/llm-router/README.md
-├── catalog/  chain/  guard/  tokens/
-└── logger.ts
+@jovandyaz/llm-router            # npm dependency: catalog, chain, guard, tokens — https://github.com/jovandyaz/llm-router
 
 apps/notes/src/
 ├── components/editor/ai/        # AI menu, slash commands, result panel, ai-actions.config.ts
@@ -392,7 +390,7 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 
 ## Prompt Injection Defense
 
-`detectPromptInjection()` from `@jovandyaz/llm-router` (`packages/llm-router/src/guard/prompt-guard.ts`) checks all user input against known injection patterns (OWASP LLM01:2025) before processing.
+`detectPromptInjection()` from [`@jovandyaz/llm-router`](https://github.com/jovandyaz/llm-router) (`src/guard/prompt-guard.ts` there) checks all user input against known injection patterns (OWASP LLM01:2025) before processing.
 
 **Detection categories** (English **and Spanish** patterns — the product is bilingual):
 
@@ -679,7 +677,7 @@ Prices, context windows and capabilities come from the **model index**: the `ai_
 - **Floor guard.** A provider's batch that would leave unserved a floor entry its provider serves now — a platform intent, keyed by its selector key (`platform.<intent>`), or a BYOK intent route (`byok.<intent>@<provider>`), see _Refreshing the floor_ — is rejected whole. An entry counts as served while its selector resolves, over the provider's listed rows (or its snapshot rows while it lists none), to a row that is supported, priced above zero both ways and given an input window; it is lost when the batch degrades or drops that row and no other eligible row takes its place. No fixed model id anchors an entry. The batch is judged by what the write leaves served: its rows plus the listed rows of the ids it discarded or skipped, which the write keeps. None of a rejected batch's rows are written, nothing is retired, and `ai.model_index.sync_rejected` is logged at error level with `reason: 'floor'` and the floor keys. A schema drift across a provider (say, OpenRouter renaming `input_modalities`) keeps the last good rows instead of unsupporting every model. One model leaving upstream does not freeze the batch, because its selector resolves to the next eligible row of its families; a platform or BYOK selector whose only eligible row upstream deprecates, re-families or reprices keeps its provider's sync rejected until a successor lands or the selectors change. Pins are not part of the floor: an admin owns them. Each rejected provider also fires one `model_index.floor_rejected` [webhook alert](#health--alerting) per sync, carrying the `provider` and the floor keys it would leave unserved (`models`), so an operator is emailed rather than left to find the error log.
 - **Serving.** `ModelIndexCache` re-reads the listed rows every 60s (`MODEL_INDEX_REFRESH_MS`) and answers synchronously, behind `CompositeModelCatalog`. A failed read keeps the catalog already served and logs `ai.model_index.cache_refresh_failed`.
 - **Vendored floor.** `MODEL_INDEX_SNAPSHOT` (`model-index.snapshot.ts`) ships with `@jovandyaz/llm-router`. Each provider is served from its snapshot rows until the index lists rows for it; from then on its index rows replace its snapshot rows entirely, so a model the sync retired stops being supported. A fresh database, or a provider whose sync never landed, still prices every model the snapshot lists, the seeded resolutions included today. `snapshot-floor.spec.ts` holds the snapshot to the selectors' resolutions, not to the seeded ids.
-- **Refreshing the floor.** `pnpm catalog:refresh-snapshot` (`nx run api:refresh-model-index-snapshot`) reads both sources and rewrites the snapshot. It refuses to write when models.dev discarded an entry, when OpenRouter stopped paginating, or when the floor would be unserved. The floor is the three platform intents, keyed `platform.fast`, `platform.balanced` and `platform.powerful`, each of which must resolve under its [platform selector](#platform-selectors) to a row that is supported, priced and given an input window, plus the 12 BYOK intent routes (3 intents × the 4 BYOK providers, keyed `byok.<intent>@<provider>`), each of which must resolve to a served row under the [BYOK selectors](#tier-catalog); a route left unrouted refuses the write too. `snapshot-floor.spec.ts` runs the same `unservedFloorModels` check against the committed snapshot. The script also writes `MODEL_INDEX_SNAPSHOT_DATE`, the UTC day it ran, and the specs that resolve selectors against the snapshot run at that day (`SNAPSHOT_DATE`), so a refresh moves their retirement windows with it.
+- **Refreshing the floor.** The snapshot is refreshed in [`@jovandyaz/llm-router`](https://github.com/jovandyaz/llm-router) and reaches Knowtis only by upgrading that dependency; while the package is 0.x a refresh ships as a minor version, so a caret range never picks one up unasked. The floor is the three platform intents, keyed `platform.fast`, `platform.balanced` and `platform.powerful`, each of which must resolve under its [platform selector](#platform-selectors) to a row that is supported, priced and given an input window, plus the 12 BYOK intent routes (3 intents × the 4 BYOK providers, keyed `byok.<intent>@<provider>`), each of which must resolve to a served row under the [BYOK selectors](#tier-catalog); a route left unrouted counts as unserved. `snapshot-floor.spec.ts` runs `unservedFloorModels` against the installed snapshot, so an upgrade that leaves the floor unserved fails CI. The specs that resolve selectors against the snapshot run at its `MODEL_INDEX_SNAPSHOT_DATE` (`SNAPSHOT_DATE`), so an upgrade moves their retirement windows with it.
 - `computeTokenCostUsd` prices each request from the served model's rates, including cache read/write token rates. Voice transcription is priced per second of audio from `TRANSCRIPTION_PRICES` (`openai:whisper-1`), using the real duration reported by the provider; a transcription model is never a supported chat model.
 - Unknown models record `costUsd = 0` and log `ai.pricing.unknown_model` once per model. A model priced on only one side of a completion logs `ai.pricing.partial_model` once — the missing side is charged at $0.
 
@@ -1431,7 +1429,7 @@ pnpm nx run api:eval
   provider keys skips cleanly (exit 0). It is opt-in and excluded from `nx affected` (paid +
   non-deterministic). CI runs it only in `nightly-eval.yml`, `model-gate.yml` and `pr-eval.yml`.
   `pr-eval.yml` runs one trial of the injection guard suite against the default eval model on
-  same-repo PRs touching the agent or `llm-router`. It catches guard and prompt regressions, not
+  same-repo PRs touching the agent. It catches guard and prompt regressions, not
   attacks that depend on a served model, and it does not block merge.
 - **Prerequisites:** `pnpm docker:up` running, plus `ANTHROPIC_API_KEY` in `apps/api/.env` for the
   Anthropic-gated suites (without it they skip and the command still exits 0) — the

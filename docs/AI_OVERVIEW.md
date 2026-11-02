@@ -2,12 +2,12 @@
 
 Knowtis serves AI through two surfaces on a shared core, and an MCP server lets external AI clients in. The full reference is [AI.md](./AI.md).
 
-| Part               | What it does                                                                 | Code                         |
-| ------------------ | ---------------------------------------------------------------------------- | ---------------------------- |
-| **Single-shot AI** | Editor actions, ghost text, voice notes                                      | `apps/api/src/modules/ai`    |
-| **Copilot**        | Conversational agent with tools, memory and approvals                        | `apps/api/src/modules/agent` |
-| **Shared core**    | Fallback chain, cooldowns, injection guard, token costing. Framework-free    | `packages/llm-router`        |
-| **MCP server**     | Lets external AI clients read and change notes under OAuth or API-key scopes | `apps/mcp`                   |
+| Part               | What it does                                                                 | Code                          |
+| ------------------ | ---------------------------------------------------------------------------- | ----------------------------- |
+| **Single-shot AI** | Editor actions, ghost text, voice notes                                      | `apps/api/src/modules/ai`     |
+| **Copilot**        | Conversational agent with tools, memory and approvals                        | `apps/api/src/modules/agent`  |
+| **Shared core**    | Fallback chain, cooldowns, injection guard, token costing. Framework-free    | `@jovandyaz/llm-router` (npm) |
+| **MCP server**     | Lets external AI clients read and change notes under OAuth or API-key scopes | `apps/mcp`                    |
 
 ## One copilot turn
 
@@ -44,12 +44,12 @@ A fresh copilot turn uses the model in the request, then the user's preferred mo
 
 ## How it is checked
 
-| Check                                                            | When                                                  | Decides                                                                                                                                                        |
-| ---------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit and integration tests, including a scripted hostile model   | Every PR, for affected projects                       | Whether the PR is ready to merge                                                                                                                               |
-| PR Evals (`pr-eval.yml`), one trial of the injection guard suite | PRs from this repo touching the agent or `llm-router` | Nothing yet: informational                                                                                                                                     |
-| Model Gate (`model-gate.yml`)                                    | Daily                                                 | Whether a pending model activates. A decided failure is not retried while the selector keeps resolving to that model; an inconclusive run retries the next day |
-| Weekly Evals (`nightly-eval.yml`)                                | Mondays                                               | Nothing in production. A leg goes red on a failed security verdict, a failed run or significant drift, and sends no alert                                      |
+| Check                                                            | When                                  | Decides                                                                                                                                                        |
+| ---------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit and integration tests, including a scripted hostile model   | Every PR, for affected projects       | Whether the PR is ready to merge                                                                                                                               |
+| PR Evals (`pr-eval.yml`), one trial of the injection guard suite | PRs from this repo touching the agent | Nothing yet: informational                                                                                                                                     |
+| Model Gate (`model-gate.yml`)                                    | Daily                                 | Whether a pending model activates. A decided failure is not retried while the selector keeps resolving to that model; an inconclusive run retries the next day |
+| Weekly Evals (`nightly-eval.yml`)                                | Mondays                               | Nothing in production. A leg goes red on a failed security verdict, a failed run or significant drift, and sends no alert                                      |
 
 Traces go to Langfuse through OpenTelemetry, with content redacted in production and on BYOK turns: see [Telemetry](./AI.md#telemetry-langfuse).
 
@@ -59,4 +59,4 @@ Traces go to Langfuse through OpenTelemetry, with content redacted in production
 - [Fallback chain](./AI.md#cross-provider-fallback-chain) and [copilot model selection](./AI.md#copilot-model-selection)
 - [Eval harness](./AI.md#copilot-eval-harness) and [long-term memory](./AI.md#long-term-user-memory-a6b)
 - [BYOK](./AI.md#bring-your-own-key-byok)
-- [Agent module README](../apps/api/src/modules/agent/README.md) and [`llm-router` README](../packages/llm-router/README.md)
+- [Agent module README](../apps/api/src/modules/agent/README.md) and [`llm-router` README](https://github.com/jovandyaz/llm-router#readme)

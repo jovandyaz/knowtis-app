@@ -23,7 +23,6 @@
     "ignoreDeprecations": "5.0",
     "baseUrl": ".",
     "paths": {
-      "@jovandyaz/llm-router": ["packages/llm-router/src/index.ts"],
       "@knowtis/design-system": ["packages/design-system/src/index.ts"],
       "@knowtis/editor-schema": ["packages/editor-schema/src/index.ts"],
       "@knowtis/editor-schema/server": ["packages/editor-schema/src/server.ts"],

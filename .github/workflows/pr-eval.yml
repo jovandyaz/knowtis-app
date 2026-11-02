@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - 'apps/api/src/modules/agent/**'
-      - 'packages/llm-router/**'
       - '.github/workflows/pr-eval.yml'
 
 permissions:

@@ -48,7 +48,7 @@ That script starts the deploy detached and then polls until the deployment reach
 | `.github/workflows/nightly-eval.yml`   | Weekly AI eval run of the reference and the served models (no deploy)                                                                                                                                                                                      |
 | `.github/workflows/storybook.yml`      | Publishes the design system Storybook to GitHub Pages when its inputs change on `main`                                                                                                                                                                     |
 | `.github/workflows/model-gate.yml`     | Daily eval gate that activates or fails pending platform model candidates (no deploy)                                                                                                                                                                      |
-| `.github/workflows/pr-eval.yml`        | One trial of the injection guard eval on same-repo PRs touching the agent or `llm-router` (no deploy, no merge block)                                                                                                                                      |
+| `.github/workflows/pr-eval.yml`        | One trial of the injection guard eval on same-repo PRs touching the agent (no deploy, no merge block)                                                                                                                                                      |
 
 **Required GitHub secrets/variables:**
 
