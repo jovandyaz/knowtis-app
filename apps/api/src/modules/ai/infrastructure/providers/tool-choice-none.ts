@@ -1,4 +1,4 @@
-import { OPENROUTER_PROVIDER, providerOf } from '@jovandyaz/ai-gateway';
+import { OPENROUTER_PROVIDER, providerOf } from '@jovandyaz/llm-router';
 
 import type { AIProvider } from '@knowtis/shared-types';
 

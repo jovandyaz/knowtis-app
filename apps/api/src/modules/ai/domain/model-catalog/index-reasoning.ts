@@ -1,4 +1,4 @@
-import type { IndexedReasoning } from '@jovandyaz/ai-gateway';
+import type { IndexedReasoning } from '@jovandyaz/llm-router';
 
 import { REASONING_EFFORTS, type ModelReasoning } from '@knowtis/shared-types';
 

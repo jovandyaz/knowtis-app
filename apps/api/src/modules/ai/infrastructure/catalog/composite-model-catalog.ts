@@ -2,7 +2,7 @@ import type {
   ModelCatalog,
   ModelContextWindow,
   ModelPricing,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Injectable, Logger } from '@nestjs/common';
 
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';

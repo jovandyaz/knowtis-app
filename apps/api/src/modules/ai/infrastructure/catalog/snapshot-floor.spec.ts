@@ -1,4 +1,4 @@
-import { MODEL_INDEX_SNAPSHOT, ModelIndexCatalog } from '@jovandyaz/ai-gateway';
+import { MODEL_INDEX_SNAPSHOT, ModelIndexCatalog } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import { unservedFloorModels } from '../../domain/model-catalog/floor-models';

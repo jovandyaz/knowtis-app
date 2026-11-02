@@ -4,7 +4,7 @@ import {
   MAX_GUARD_SCAN_CHARS,
   type AiInputDetection,
   type AiInputDisposition,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 
 import {
   textOfParts,

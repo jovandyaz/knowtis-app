@@ -6,7 +6,7 @@ import {
   type IndexProvider,
   type IndexSource,
   type ModelStatus,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { sql } from 'drizzle-orm';
 import {
   boolean,

@@ -1,4 +1,4 @@
-import { MAX_INT32 } from '@jovandyaz/ai-gateway';
+import { MAX_INT32 } from '@jovandyaz/llm-router';
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 

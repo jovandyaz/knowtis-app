@@ -5,7 +5,7 @@ import {
   type IndexedModel,
   type IndexProvider,
   type ModelsDevEnrichment,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import {

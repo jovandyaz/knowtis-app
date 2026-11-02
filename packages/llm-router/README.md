@@ -1,4 +1,4 @@
-# @jovandyaz/ai-gateway
+# @jovandyaz/llm-router
 
 Framework-free core for multi-provider LLM access: model index and pricing, provider fallback chains, prompt-injection defense, and token/cost estimation. Consumed by the API's `ai`, `agent`, `artifacts`, and `organization` modules behind NestJS ports.
 
@@ -21,13 +21,13 @@ This package imports **no other `@knowtis/*` package** and **no framework** (no 
 | `chain/`    | `model-chain` (`executeWithChain` / `streamWithChain`, candidate resolution, `cooldownKeyOf`, error classifiers), `provider-cooldown.tracker`                                                                                                                                                                                                           |
 | `guard/`    | `prompt-guard` (`detectPromptInjection`), `input-sanitizer` (`sanitizeContent`), `injection-corpus` (`ATTACK_CORPUS` / `BENIGN_CORPUS`, the package-local regression corpus the guard is tested against; not part of the public API)                                                                                                                    |
 | `tokens/`   | `token-estimator` (`estimateTokenCount`, `gpt-tokenizer`)                                                                                                                                                                                                                                                                                               |
-| `logger.ts` | `GatewayLogger` — the `{ warn, error }` interface the chain and cooldown tracker log through; the API passes a NestJS `Logger`-backed adapter                                                                                                                                                                                                           |
+| `logger.ts` | `RouterLogger` — the `{ warn, error }` interface the chain and cooldown tracker log through; the API passes a NestJS `Logger`-backed adapter                                                                                                                                                                                                            |
 
 ## Public API
 
 Everything is exported from [`src/index.ts`](src/index.ts):
 
-- **Logger:** `GatewayLogger` type.
+- **Logger:** `RouterLogger` type.
 - **Catalog:** `MODEL_CATALOG`, `ModelIndexCatalog`, `MODEL_INDEX_SNAPSHOT`, `TRANSCRIPTION_PRICES`, `fromModelsDev`, `enrichmentFromModelsDev`, `fromOpenRouter`, `deriveCanonical`, `INDEX_PROVIDERS`, `INDEX_SOURCES`, `MAX_INT32`, `MODEL_STATUSES`, `MODELS_DEV_PROVIDERS`, `TOKENS_PER_MILLION`, `computeTokenCostUsd` (+ `ModelCatalog`, `ModelPricing`, `ModelContextWindow`, `IndexedModel`, `IndexedReasoning`, `IndexProvider`, `IndexSource`, `ModelStatus`, `ModelsDevEnrichment`, `OpenRouterModelInput`, `TokenCostInput` types).
 - **Chain:** `executeWithChain`, `streamWithChain`, `resolveChainCandidates`, `providerOf`, `cooldownKeyOf`, `OPENROUTER_PROVIDER`, `isAbortError`, `isOverloadedError`, `ProviderCooldownTracker` (+ `ChainScope`, `ChainContext`, `StreamChainContext`, `ChainAttemptInfo`, `ChainResolutionInput`, `CooldownConfig`, `ProviderCooldown`, `ProviderHealthSnapshot` types).
 - **Guard:** `detectPromptInjection`, `sanitizeContent`.
@@ -40,6 +40,6 @@ In `apps/api`, `MODEL_CATALOG` is bound to `CompositeModelCatalog`; the full bin
 Source-only Nx library (no build target).
 
 ```bash
-nx test ai-gateway
-nx lint ai-gateway
+nx test llm-router
+nx lint llm-router
 ```

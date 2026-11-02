@@ -4,7 +4,7 @@ import {
   MODELS_DEV_PROVIDERS,
   type IndexedModel,
   type ModelsDevEnrichment,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 

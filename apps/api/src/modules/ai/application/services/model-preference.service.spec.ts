@@ -1,4 +1,4 @@
-import { MODEL_INDEX_SNAPSHOT } from '@jovandyaz/ai-gateway';
+import { MODEL_INDEX_SNAPSHOT } from '@jovandyaz/llm-router';
 import {
   BadRequestException,
   ForbiddenException,

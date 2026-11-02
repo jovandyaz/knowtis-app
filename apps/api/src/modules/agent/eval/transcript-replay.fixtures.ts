@@ -1,4 +1,4 @@
-import { MAX_GUARD_INPUT_CHARS } from '@jovandyaz/ai-gateway';
+import { MAX_GUARD_INPUT_CHARS } from '@jovandyaz/llm-router';
 import type { Assertion } from 'promptfoo';
 
 import type { AgentMessage } from '../domain/agent-message';

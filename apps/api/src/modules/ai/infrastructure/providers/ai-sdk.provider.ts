@@ -1,4 +1,4 @@
-import { executeWithChain, streamWithChain } from '@jovandyaz/ai-gateway';
+import { executeWithChain, streamWithChain } from '@jovandyaz/llm-router';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { generateText, streamText } from 'ai';
 

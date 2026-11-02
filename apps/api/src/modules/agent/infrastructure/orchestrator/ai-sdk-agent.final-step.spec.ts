@@ -1,4 +1,4 @@
-import type { ModelPricing } from '@jovandyaz/ai-gateway';
+import type { ModelPricing } from '@jovandyaz/llm-router';
 import { Logger } from '@nestjs/common';
 import { simulateReadableStream, tool, type ToolModelMessage } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';

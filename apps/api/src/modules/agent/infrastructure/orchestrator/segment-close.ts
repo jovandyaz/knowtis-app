@@ -1,4 +1,4 @@
-import type { ModelPricing } from '@jovandyaz/ai-gateway';
+import type { ModelPricing } from '@jovandyaz/llm-router';
 
 import { AGENT_STOP_REASON } from '@knowtis/shared-types';
 

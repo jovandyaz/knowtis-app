@@ -1,4 +1,4 @@
-import { detectPromptInjection } from '@jovandyaz/ai-gateway';
+import { detectPromptInjection } from '@jovandyaz/llm-router';
 
 import { MEMORY_MAX_CHARS } from '@knowtis/shared-types';
 

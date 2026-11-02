@@ -2,7 +2,7 @@ import {
   ModelIndexCatalog,
   type IndexedModel,
   type ModelCatalog,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 
 import { createIndexedModel } from './create-indexed-model';
 

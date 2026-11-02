@@ -1,4 +1,4 @@
-import { OPENROUTER_PROVIDER } from '@jovandyaz/ai-gateway';
+import { OPENROUTER_PROVIDER } from '@jovandyaz/llm-router';
 
 import type { StepLogger } from './step-logger';
 

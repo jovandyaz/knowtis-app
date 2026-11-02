@@ -1,4 +1,4 @@
-import { detectAiInput, MAX_GUARD_INPUT_CHARS } from '@jovandyaz/ai-gateway';
+import { detectAiInput, MAX_GUARD_INPUT_CHARS } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import { AGENT_HISTORY_TOKEN_BUDGET } from '../application/run-agent-turn.handler';

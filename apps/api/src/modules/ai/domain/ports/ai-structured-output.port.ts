@@ -1,4 +1,4 @@
-import type { ChainScope } from '@jovandyaz/ai-gateway';
+import type { ChainScope } from '@jovandyaz/llm-router';
 import type { ZodType } from 'zod';
 
 import type { AITelemetryContext } from './ai-provider.port';

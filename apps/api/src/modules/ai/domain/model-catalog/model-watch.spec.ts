@@ -1,7 +1,7 @@
 import {
   MODEL_INDEX_SNAPSHOT_DATE,
   type IndexedModel,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import { createIndexedModel } from '../../testing/create-indexed-model';

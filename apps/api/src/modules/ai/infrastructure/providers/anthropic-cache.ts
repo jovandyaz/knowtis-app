@@ -1,4 +1,4 @@
-import { providerOf } from '@jovandyaz/ai-gateway';
+import { providerOf } from '@jovandyaz/llm-router';
 
 const EPHEMERAL = {
   anthropic: { cacheControl: { type: 'ephemeral' as const } },

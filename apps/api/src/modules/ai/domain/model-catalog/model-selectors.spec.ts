@@ -3,7 +3,7 @@ import {
   TOKENS_PER_MILLION,
   type IndexedModel,
   type IndexProvider,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import {

@@ -1,4 +1,4 @@
-import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@jovandyaz/ai-gateway';
+import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import {

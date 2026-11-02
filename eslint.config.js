@@ -36,7 +36,7 @@ export default defineConfig([
   globalIgnores([
     'dist',
     '**/routeTree.gen.ts',
-    'packages/ai-gateway/src/catalog/model-index.snapshot.ts',
+    'packages/llm-router/src/catalog/model-index.snapshot.ts',
     'coverage',
     'tmp',
     '.nx',
@@ -230,7 +230,7 @@ export default defineConfig([
   },
   {
     basePath: workspaceRoot,
-    files: ['packages/ai-gateway/src/**/*.ts'],
+    files: ['packages/llm-router/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -240,7 +240,7 @@ export default defineConfig([
             {
               group: ['@nestjs/*', 'ai', '@ai-sdk/*'],
               message:
-                'ai-gateway stays free of frameworks and SDKs; callers pass the model call in as a function.',
+                'llm-router stays free of frameworks and SDKs; callers pass the model call in as a function.',
             },
           ],
         },

@@ -1,4 +1,4 @@
-import { providerOf, type IndexedModel } from '@jovandyaz/ai-gateway';
+import { providerOf, type IndexedModel } from '@jovandyaz/llm-router';
 
 import {
   DEFAULT_MODEL_INTENT,

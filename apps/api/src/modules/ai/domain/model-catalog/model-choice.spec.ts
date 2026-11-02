@@ -2,7 +2,7 @@ import {
   MODEL_INDEX_SNAPSHOT,
   ModelIndexCatalog,
   type IndexedModel,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import type {

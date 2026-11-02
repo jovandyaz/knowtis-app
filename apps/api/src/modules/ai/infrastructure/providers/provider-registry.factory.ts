@@ -1,7 +1,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogle } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
-import { OPENROUTER_PROVIDER, providerOf } from '@jovandyaz/ai-gateway';
+import { OPENROUTER_PROVIDER, providerOf } from '@jovandyaz/llm-router';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';

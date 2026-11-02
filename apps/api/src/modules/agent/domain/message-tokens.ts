@@ -1,4 +1,4 @@
-import { estimateTokenCount } from '@jovandyaz/ai-gateway';
+import { estimateTokenCount } from '@jovandyaz/llm-router';
 
 import type { AgentMessage } from './agent-message';
 

@@ -4,7 +4,7 @@ import {
   computeTokenCostUsd,
   MODEL_CATALOG,
   type ModelCatalog,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Test, type TestingModule } from '@nestjs/testing';
 
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';

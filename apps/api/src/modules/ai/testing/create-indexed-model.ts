@@ -1,4 +1,4 @@
-import type { IndexedModel } from '@jovandyaz/ai-gateway';
+import type { IndexedModel } from '@jovandyaz/llm-router';
 
 export function createIndexedModel(
   overrides: Partial<IndexedModel> & { id: string }

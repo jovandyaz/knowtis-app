@@ -3,7 +3,7 @@ import {
   MODEL_INDEX_SNAPSHOT,
   ModelIndexCatalog,
   type IndexedModel,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

@@ -1,4 +1,4 @@
-import { OPENROUTER_PROVIDER, providerOf } from '@jovandyaz/ai-gateway';
+import { OPENROUTER_PROVIDER, providerOf } from '@jovandyaz/llm-router';
 import { Injectable, Logger } from '@nestjs/common';
 
 import type { ModelReasoning, ReasoningEffort } from '@knowtis/shared-types';

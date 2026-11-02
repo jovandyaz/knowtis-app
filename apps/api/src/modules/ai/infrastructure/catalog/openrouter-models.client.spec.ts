@@ -1,4 +1,4 @@
-import { MAX_INT32 } from '@jovandyaz/ai-gateway';
+import { MAX_INT32 } from '@jovandyaz/llm-router';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

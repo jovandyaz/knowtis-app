@@ -4,7 +4,7 @@ import {
   isOverloadedError,
   providerOf,
   type ProviderCooldown,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import {
   pruneMessages,
   type ModelMessage,

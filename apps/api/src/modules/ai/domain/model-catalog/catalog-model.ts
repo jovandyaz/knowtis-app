@@ -1,4 +1,4 @@
-import { providerOf } from '@jovandyaz/ai-gateway';
+import { providerOf } from '@jovandyaz/llm-router';
 
 import type { CatalogModelStatus, ModelTier } from '@knowtis/shared-types';
 

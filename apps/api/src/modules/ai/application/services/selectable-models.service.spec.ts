@@ -3,7 +3,7 @@ import {
   ModelIndexCatalog,
   type IndexedModel,
   type ModelCatalog,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {

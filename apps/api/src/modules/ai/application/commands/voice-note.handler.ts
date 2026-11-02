@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { MODEL_CATALOG, type ModelCatalog } from '@jovandyaz/ai-gateway';
+import { MODEL_CATALOG, type ModelCatalog } from '@jovandyaz/llm-router';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { err, ok, type Result } from 'neverthrow';

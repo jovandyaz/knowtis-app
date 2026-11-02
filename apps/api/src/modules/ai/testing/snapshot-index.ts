@@ -1,7 +1,7 @@
 import {
   MODEL_INDEX_SNAPSHOT,
   MODEL_INDEX_SNAPSHOT_DATE,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 
 import { ModelIndexCache } from '../infrastructure/catalog/model-index.cache';
 import { createModelIndexRepositoryStub } from './create-model-index-repository-stub';

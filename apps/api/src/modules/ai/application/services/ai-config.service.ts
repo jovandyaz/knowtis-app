@@ -1,4 +1,4 @@
-import { MODEL_CATALOG, type ModelCatalog } from '@jovandyaz/ai-gateway';
+import { MODEL_CATALOG, type ModelCatalog } from '@jovandyaz/llm-router';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Cache } from 'cache-manager';

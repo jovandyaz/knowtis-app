@@ -1,6 +1,6 @@
-import { estimateTokenCount } from '@jovandyaz/ai-gateway';
 import { CurrentUser, JwtAuthGuard } from '@jovandyaz/auth-nestjs';
 import type { RequestUser } from '@jovandyaz/auth/server';
+import { estimateTokenCount } from '@jovandyaz/llm-router';
 import {
   PoliciesGuard,
   RequirePermission,

@@ -1,4 +1,4 @@
-import { executeWithChain } from '@jovandyaz/ai-gateway';
+import { executeWithChain } from '@jovandyaz/llm-router';
 import { generateText, streamText, type LanguageModel } from 'ai';
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 

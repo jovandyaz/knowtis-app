@@ -2,7 +2,7 @@ import {
   MODEL_CATALOG,
   sanitizeContent,
   type ModelCatalog,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Result } from 'neverthrow';
 

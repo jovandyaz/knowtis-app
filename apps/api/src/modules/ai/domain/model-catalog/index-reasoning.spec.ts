@@ -1,4 +1,4 @@
-import type { IndexedReasoning } from '@jovandyaz/ai-gateway';
+import type { IndexedReasoning } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import { createSnapshotIndex } from '../../testing/snapshot-index';

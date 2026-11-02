@@ -1,7 +1,7 @@
 import type { AnthropicLanguageModelOptions } from '@ai-sdk/anthropic';
 import type { GoogleLanguageModelOptions } from '@ai-sdk/google';
 import type { OpenAILanguageModelResponsesOptions } from '@ai-sdk/openai';
-import { OPENROUTER_PROVIDER, providerOf } from '@jovandyaz/ai-gateway';
+import { OPENROUTER_PROVIDER, providerOf } from '@jovandyaz/llm-router';
 
 import type { ReasoningEffort } from '@knowtis/shared-types';
 

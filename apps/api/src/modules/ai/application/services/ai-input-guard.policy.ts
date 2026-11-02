@@ -2,7 +2,7 @@ import type {
   AiInputDetection,
   AiInputDisposition,
   AiInputSurface,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import type { Logger } from '@nestjs/common';
 
 type InputRole = 'user' | 'assistant' | 'tool';

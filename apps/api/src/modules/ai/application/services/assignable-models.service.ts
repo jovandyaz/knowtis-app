@@ -1,4 +1,4 @@
-import { INDEX_PROVIDERS, providerOf } from '@jovandyaz/ai-gateway';
+import { INDEX_PROVIDERS, providerOf } from '@jovandyaz/llm-router';
 import { Injectable } from '@nestjs/common';
 
 import type { AssignableModelDto, ModelTier } from '@knowtis/shared-types';

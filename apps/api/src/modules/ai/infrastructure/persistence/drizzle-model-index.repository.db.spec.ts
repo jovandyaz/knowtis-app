@@ -1,4 +1,4 @@
-import { MAX_INT32, type IndexedModel } from '@jovandyaz/ai-gateway';
+import { MAX_INT32, type IndexedModel } from '@jovandyaz/llm-router';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { eq, inArray, isNull } from 'drizzle-orm';

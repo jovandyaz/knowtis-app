@@ -5,7 +5,7 @@ import {
   MODEL_INDEX_SNAPSHOT_DATE,
   ModelIndexCatalog,
   type IndexedModel,
-} from '@jovandyaz/ai-gateway';
+} from '@jovandyaz/llm-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SELECTOR_KEY_BY_INTENT } from '../modules/ai/domain/model-catalog/platform-resolution';
