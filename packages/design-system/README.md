@@ -12,7 +12,7 @@ import { Button, cn, Dialog, ModelSelect } from '@knowtis/design-system';
 
 ## Storybook
 
-Storybook is the canonical component catalog — browse it before building new UI.
+Storybook is the canonical component catalog — browse it before building new UI. The published copy of `main` is at <https://jovandyaz.github.io/knowtis-app/>.
 
 ```bash
 nx storybook design-system          # dev server on http://localhost:6006
