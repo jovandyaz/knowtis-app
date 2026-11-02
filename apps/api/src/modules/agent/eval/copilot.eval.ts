@@ -12,6 +12,7 @@ import {
   evalSuiteTimeoutMs,
   failedCriticalCases,
   gradedTrialCount,
+  GRADER_PROVIDER,
   prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
@@ -23,7 +24,6 @@ import {
 loadEnv({ path: '.env.local', quiet: true });
 loadEnv({ path: '.env', quiet: true });
 
-const GRADER_PROVIDER = 'anthropic:messages:claude-haiku-4-5';
 const TRIALS = resolveEvalTrials();
 const CASES = selectEvalCases(
   COPILOT_EVAL_CASES,
