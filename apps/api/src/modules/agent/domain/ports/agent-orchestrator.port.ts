@@ -1,3 +1,5 @@
+import type { ModelPricing } from '@knowtis/ai-gateway';
+
 import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
 import type { TurnEffort } from '../../../ai/domain/model-catalog/effort-policy';
 import type { AgentEvent, AgentSource } from '../agent-event';
@@ -14,6 +16,9 @@ export interface AgentRunInput {
   readonly model: string;
   readonly maxSteps: number;
   readonly maxTurnTokens: number;
+  readonly maxTurnCostUsd: number;
+  /** Prices of a model this turn may serve, read for every model a failover reaches; undefined leaves that model's calls out of the USD budget, never the token one. */
+  readonly pricingFor: (model: string) => ModelPricing | undefined;
   readonly noteId?: string;
   readonly signal?: AbortSignal;
   readonly resume?: AgentResumeContext;

@@ -364,6 +364,8 @@ function cappedTurn(model: string): AgentRunInput {
     messages: [{ role: 'user', content: 'Lee la nota n1 y resúmela.' }],
     maxSteps: 2,
     maxTurnTokens: 150_000,
+    maxTurnCostUsd: Number.POSITIVE_INFINITY,
+    pricingFor: () => undefined,
     effortFor: async () => ({ step: 'medium', toolFree: 'low' }),
   };
 }

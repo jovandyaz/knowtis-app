@@ -5,6 +5,8 @@ import { Test } from '@nestjs/testing';
 import { config as loadEnv } from 'dotenv';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
+
 import type { EnvConfig } from '../../../config/env.config';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import type { AgentEvent, WebSource } from '../domain/agent-event';
@@ -27,6 +29,8 @@ describe.runIf(GATE)('web search tool quality', () => {
   let orchestrator: AgentOrchestrator;
   let maxSteps: number;
   let maxTurnTokens: number;
+  let maxTurnCostUsd: number;
+  let catalog: ModelCatalog;
   let moduleClose: () => Promise<void>;
 
   beforeAll(async () => {
@@ -47,6 +51,8 @@ describe.runIf(GATE)('web search tool quality', () => {
     );
     maxSteps = config.get('AI_AGENT_MAX_STEPS');
     maxTurnTokens = config.get('AI_AGENT_TURN_TOKEN_BUDGET');
+    maxTurnCostUsd = config.get('AI_AGENT_TURN_COST_BUDGET_USD');
+    catalog = moduleRef.get<ModelCatalog>(MODEL_CATALOG, { strict: false });
   }, 120_000);
 
   afterAll(async () => {
@@ -69,6 +75,8 @@ describe.runIf(GATE)('web search tool quality', () => {
       model,
       maxSteps,
       maxTurnTokens,
+      maxTurnCostUsd,
+      pricingFor: (candidate) => catalog.getPricing(candidate),
     });
 
     let webSources: readonly WebSource[] = [];

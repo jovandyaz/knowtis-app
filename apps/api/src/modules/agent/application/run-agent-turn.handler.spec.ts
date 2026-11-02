@@ -181,6 +181,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     AI_AGENT_MAX_STEPS: 8,
     AI_AGENT_BYOK_MAX_STEPS: 20,
     AI_AGENT_TURN_TOKEN_BUDGET: 150000,
+    AI_AGENT_TURN_COST_BUDGET_USD: 0.5,
     AI_AGENT_MAX_OUTPUT_TOKENS: AGENT_MAX_OUTPUT_TOKENS,
     AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 12000,
   };
@@ -2581,8 +2582,24 @@ describe('RunAgentTurnHandler', () => {
       await handler.execute(turnInput(), callbacks);
 
       expect(orchestrator.run).toHaveBeenCalledWith(
-        expect.objectContaining({ maxSteps: 8, maxTurnTokens: 150000 })
+        expect.objectContaining({
+          maxSteps: 8,
+          maxTurnTokens: 150000,
+          maxTurnCostUsd: 0.5,
+        })
       );
+    });
+
+    it('hands the orchestrator the catalog prices of any model the chain may serve', async () => {
+      const { handler, orchestrator, callbacks } = makeContextHandler();
+
+      await handler.execute(turnInput(), callbacks);
+
+      const [{ pricingFor }] = vi.mocked(orchestrator.run).mock.calls[0];
+      expect(pricingFor(ANTHROPIC_MODEL)).toEqual(
+        createTestCatalog().getPricing(ANTHROPIC_MODEL)
+      );
+      expect(pricingFor('anthropic:not-in-the-catalog')).toBeUndefined();
     });
 
     it('stores no explicit model when the billing guard refuses the turn', async () => {
@@ -2734,6 +2751,7 @@ describe('RunAgentTurnHandler', () => {
         expect.objectContaining({
           maxSteps: 20,
           maxTurnTokens: Number.POSITIVE_INFINITY,
+          maxTurnCostUsd: Number.POSITIVE_INFINITY,
         })
       );
       expect(byok.resolveKey).toHaveBeenCalledWith(USER, 'anthropic');
@@ -2791,7 +2809,7 @@ describe('RunAgentTurnHandler', () => {
       );
     });
 
-    it('clamps an anonymous turn to the anonymous daily token share', async () => {
+    it('clamps an anonymous turn to the anonymous daily token and USD shares', async () => {
       const { handler, orchestrator, tierResolver, callbacks } =
         makeContextHandler();
       vi.mocked(tierResolver.resolve).mockResolvedValue(
@@ -2801,7 +2819,11 @@ describe('RunAgentTurnHandler', () => {
       await handler.execute(turnInput({ isAnonymous: true }), callbacks);
 
       expect(orchestrator.run).toHaveBeenCalledWith(
-        expect.objectContaining({ maxSteps: 8, maxTurnTokens: 33000 })
+        expect.objectContaining({
+          maxSteps: 8,
+          maxTurnTokens: 33000,
+          maxTurnCostUsd: 0.33,
+        })
       );
     });
 
@@ -8989,6 +9011,16 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       ).toHaveBeenCalledExactlyOnceWith(executionFor(USER), { pinned: null });
       expect(runModel(ctx)).toBe(PREFERRED_MODEL);
     });
+  });
+
+  it('runs a continuation on a whole USD budget of its own', async () => {
+    const ctx = setup({ events: doneWith('token_budget') });
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    expect(ctx.orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ maxTurnCostUsd: 0.5 })
+    );
   });
 
   it.each([

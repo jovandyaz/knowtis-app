@@ -186,6 +186,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         maxRetries: this.configService.get('AI_MAX_RETRIES'),
         maxMs: this.configService.get('AI_AGENT_MAX_MS'),
         maxTurnTokens: input.maxTurnTokens,
+        maxTurnCostUsd: input.maxTurnCostUsd,
         synthesisReserveTokens: this.configService.get(
           'AI_AGENT_SYNTHESIS_RESERVE_TOKENS'
         ),

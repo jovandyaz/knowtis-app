@@ -163,6 +163,8 @@ const baseInput = {
   model: MODEL,
   maxSteps: 4,
   maxTurnTokens: TURN_TOKEN_BUDGET,
+  maxTurnCostUsd: Number.POSITIVE_INFINITY,
+  pricingFor: () => undefined,
 };
 
 describe('AiSdkAgentOrchestrator', () => {
@@ -957,6 +959,8 @@ describe('AiSdkAgentOrchestrator', () => {
         model: 'anthropic:claude-sonnet-4-20250514',
         maxSteps: 4,
         maxTurnTokens: TURN_TOKEN_BUDGET,
+        maxTurnCostUsd: baseInput.maxTurnCostUsd,
+        pricingFor: baseInput.pricingFor,
         knownNotes: [{ id: 'prev-id', title: 'Earlier note' }],
       })
     );
@@ -3529,8 +3533,11 @@ describe('AiSdkAgentOrchestrator', () => {
       userId: 'u1',
       model: MODEL,
       reason: 'max_steps',
+      overCostBudget: false,
       completedSteps: 1,
       spentTurnTokens: 6,
+      spentTurnCostUsd: 0,
+      maxTurnCostUsd: Number.POSITIVE_INFINITY,
       maxOutputTokens: 4096,
     });
     expect(streamTextMock.mock.calls[1][0].maxOutputTokens).toBe(4096);

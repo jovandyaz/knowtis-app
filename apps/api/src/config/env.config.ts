@@ -95,6 +95,7 @@ const envSchemaBase = z.object({
   AI_AGENT_TTFT_MS: z.coerce.number().int().min(1000).default(30000),
   AI_AGENT_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).default(8192),
   AI_AGENT_TURN_TOKEN_BUDGET: z.coerce.number().int().min(1000).default(150000),
+  AI_AGENT_TURN_COST_BUDGET_USD: z.coerce.number().positive().default(0.5),
   AI_AGENT_SYNTHESIS_RESERVE_TOKENS: z.coerce
     .number()
     .int()

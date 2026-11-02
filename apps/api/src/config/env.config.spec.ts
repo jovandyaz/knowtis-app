@@ -275,6 +275,26 @@ describe('env.config agent vars', () => {
     );
   });
 
+  it('defaults the per-turn USD budget to 0.50', () => {
+    expect(validateEnv(baseEnv).AI_AGENT_TURN_COST_BUDGET_USD).toBe(0.5);
+  });
+
+  it('reads the per-turn USD budget from the environment', () => {
+    expect(
+      validateEnv({ ...baseEnv, AI_AGENT_TURN_COST_BUDGET_USD: '1.25' })
+        .AI_AGENT_TURN_COST_BUDGET_USD
+    ).toBe(1.25);
+  });
+
+  it.each(['0', '-1', 'free'])(
+    'refuses a per-turn USD budget of %s, which would close every turn',
+    (budget) => {
+      expect(() =>
+        validateEnv({ ...baseEnv, AI_AGENT_TURN_COST_BUDGET_USD: budget })
+      ).toThrow(/AI_AGENT_TURN_COST_BUDGET_USD/);
+    }
+  );
+
   it('accepts a stall budget strictly below the ceiling', () => {
     const env = validateEnv({
       ...baseEnv,

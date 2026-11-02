@@ -77,7 +77,8 @@ export class AgentEvalHarness {
     private readonly retrieval: RecordingFixtureRetrieval,
     private readonly turnSettings: EvalTurnSettings,
     private readonly maxSteps: number,
-    private readonly maxTurnTokens: number
+    private readonly maxTurnTokens: number,
+    private readonly maxTurnCostUsd: number
   ) {}
 
   /** Builds a harness over ready-made collaborators, for suites that must not boot the module graph. */
@@ -90,6 +91,7 @@ export class AgentEvalHarness {
     turnSettings: EvalTurnSettings;
     maxSteps: number;
     maxTurnTokens: number;
+    maxTurnCostUsd: number;
   }): AgentEvalHarness {
     return new AgentEvalHarness(
       deps.moduleRef,
@@ -99,7 +101,8 @@ export class AgentEvalHarness {
       deps.retrieval,
       deps.turnSettings,
       deps.maxSteps,
-      deps.maxTurnTokens
+      deps.maxTurnTokens,
+      deps.maxTurnCostUsd
     );
   }
 
@@ -149,6 +152,7 @@ export class AgentEvalHarness {
       };
       const maxSteps = config.get('AI_AGENT_MAX_STEPS');
       const maxTurnTokens = config.get('AI_AGENT_TURN_TOKEN_BUDGET');
+      const maxTurnCostUsd = config.get('AI_AGENT_TURN_COST_BUDGET_USD');
 
       return new AgentEvalHarness(
         moduleRef,
@@ -158,7 +162,8 @@ export class AgentEvalHarness {
         retrieval,
         turnSettings,
         maxSteps,
-        maxTurnTokens
+        maxTurnTokens,
+        maxTurnCostUsd
       );
     } catch (error) {
       await moduleRef.close();
@@ -190,6 +195,8 @@ export class AgentEvalHarness {
       maxSteps: options.maxSteps ?? this.maxSteps,
       ...(userMemories.length > 0 ? { userMemories } : {}),
       maxTurnTokens: this.maxTurnTokens,
+      maxTurnCostUsd: this.maxTurnCostUsd,
+      pricingFor: (candidate) => this.catalog.getPricing(candidate),
       effortFor: (candidate) => this.turnSettings.effortFor(candidate),
       openrouterProviderOrder,
       openrouterIgnoredProviders,

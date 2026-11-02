@@ -237,6 +237,8 @@ async function runTurn(
     ],
     maxSteps: options.maxSteps ?? 6,
     maxTurnTokens: 100_000,
+    maxTurnCostUsd: Number.POSITIVE_INFINITY,
+    pricingFor: () => undefined,
     ...(options.resume ? { resume: options.resume } : {}),
     ...(options.historyReadForeignContent
       ? { historyReadForeignContent: true }
