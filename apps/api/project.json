@@ -139,7 +139,8 @@
         "default",
         "^production",
         "{workspaceRoot}/.github/workflows/nightly-eval.yml",
-        "{workspaceRoot}/.github/workflows/model-gate.yml"
+        "{workspaceRoot}/.github/workflows/model-gate.yml",
+        "{workspaceRoot}/.github/workflows/pr-eval.yml"
       ],
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {
@@ -179,6 +180,13 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm exec vitest run --config vitest.eval.config.ts",
+        "cwd": "apps/api"
+      }
+    },
+    "eval-injection-guard": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec vitest run --config vitest.eval.config.ts src/modules/agent/eval/injection-guard.eval.ts",
         "cwd": "apps/api"
       }
     },

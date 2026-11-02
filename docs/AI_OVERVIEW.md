@@ -44,11 +44,12 @@ A fresh copilot turn uses the model in the request, then the user's preferred mo
 
 ## How it is checked
 
-| Check                                                          | When                            | Decides                                                                                                                                                        |
-| -------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit and integration tests, including a scripted hostile model | Every PR, for affected projects | Whether the PR is ready to merge                                                                                                                               |
-| Model Gate (`model-gate.yml`)                                  | Daily                           | Whether a pending model activates. A decided failure is not retried while the selector keeps resolving to that model; an inconclusive run retries the next day |
-| Weekly Evals (`nightly-eval.yml`)                              | Mondays                         | Nothing in production. A leg goes red on a failed security verdict, a failed run or significant drift, and sends no alert                                      |
+| Check                                                            | When                                                  | Decides                                                                                                                                                        |
+| ---------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit and integration tests, including a scripted hostile model   | Every PR, for affected projects                       | Whether the PR is ready to merge                                                                                                                               |
+| PR Evals (`pr-eval.yml`), one trial of the injection guard suite | PRs from this repo touching the agent or `ai-gateway` | Nothing yet: informational                                                                                                                                     |
+| Model Gate (`model-gate.yml`)                                    | Daily                                                 | Whether a pending model activates. A decided failure is not retried while the selector keeps resolving to that model; an inconclusive run retries the next day |
+| Weekly Evals (`nightly-eval.yml`)                                | Mondays                                               | Nothing in production. A leg goes red on a failed security verdict, a failed run or significant drift, and sends no alert                                      |
 
 Traces go to Langfuse through OpenTelemetry, with content redacted in production and on BYOK turns: see [Telemetry](./AI.md#telemetry-langfuse).
 
