@@ -24,4 +24,5 @@ Run tasks through `pnpm nx`; pnpm is the only package manager.
 - CodeRabbit does nothing until someone comments `@coderabbitai full review`. Confirm inline comments exist afterwards: a green check with none is a skipped review.
 - Branches use a Conventional prefix: `feat/<name>`, `fix/<name>`, `docs/<name>`.
 - Open every PR with its author as assignee and at least one label: `gh pr create --assignee @me --label <label>`. `gh label list` is the set; add a missing label in grey, `--color ededed`, rather than forcing a bad fit.
+- `gh pr edit` fails on the deprecated `repository.pullRequest.projectCards` GraphQL field and changes nothing. Edit through REST: `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f body=…` for body or base, `gh api -X POST repos/<owner>/<repo>/issues/<n>/labels -f 'labels[]=<label>'`, and `…/issues/<n>/assignees -f 'assignees[]=<user>'`.
 - `main` only takes squash merges of branches that are up to date with it, so each merge makes the other open PRs stale. Run `gh pr update-branch <n> --rebase`, then `gh pr merge <n> --squash --auto` so it lands once CI passes.
