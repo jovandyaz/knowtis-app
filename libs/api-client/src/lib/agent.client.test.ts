@@ -228,7 +228,6 @@ describe('AgentClient', () => {
     handlers.get('agent:done')?.({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
       conversationId: 'conv-late',
@@ -511,7 +510,6 @@ describe('AgentClient', () => {
     handlers.get('agent:done')?.({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
       conversationId: 'conv-2',
@@ -1471,7 +1469,6 @@ describe('AgentClient – abandoning an unacknowledged request', () => {
     fake.trigger('agent:done', {
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
       conversationId: 'stale-conversation',
@@ -1559,7 +1556,6 @@ describe('AgentClient – turn identity', () => {
   const DONE = {
     usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
     sources: [],
-    knownNotes: [],
     webSources: [],
     stopReason: 'completed',
   };
@@ -2320,7 +2316,6 @@ describe('AgentClient – resending a failed turn', () => {
     fake.trigger(event, {
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
       turnId: handle.turnId,
@@ -2515,7 +2510,6 @@ describe('AgentClient – resending a turn after the transport drops', () => {
     fake.trigger('agent:done', {
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     });
@@ -2566,7 +2560,6 @@ describe('AgentClient – onQuota', () => {
     handlers.get('agent:quota')?.({ turnId: 'foreign', ...(QUOTA as object) });
     handlers.get('agent:done')?.({
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     });
@@ -2628,7 +2621,6 @@ describe('AgentClient – continuing a capped turn', () => {
   const DONE = {
     usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
     sources: [],
-    knownNotes: [],
     webSources: [],
     stopReason: 'max_steps',
   };

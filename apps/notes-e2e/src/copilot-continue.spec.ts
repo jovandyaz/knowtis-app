@@ -33,7 +33,6 @@ function done(turnId: string, conversationId: string, capped: boolean) {
     turnId,
     usage: USAGE,
     sources: [],
-    knownNotes: [],
     webSources: [],
     stopReason: capped ? CHECKPOINT : 'completed',
     continuable: capped,

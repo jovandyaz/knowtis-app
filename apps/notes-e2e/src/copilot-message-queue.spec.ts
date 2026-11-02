@@ -20,7 +20,6 @@ const DONE = {
   conversationId: CONVERSATION_ID,
   usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
   sources: [],
-  knownNotes: [],
   webSources: [],
   stopReason: 'completed',
 };

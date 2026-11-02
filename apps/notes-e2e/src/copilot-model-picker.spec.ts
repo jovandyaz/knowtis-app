@@ -371,7 +371,6 @@ test('a reply that fell back says which model answered', async ({
   agent.emit('agent:done', {
     usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
     sources: [],
-    knownNotes: [],
     webSources: [],
     stopReason: 'completed',
     turnId,

@@ -21,7 +21,7 @@ import { ThrottlingModule } from '../core/throttling/throttling.module';
 import { DatabaseModule } from '../database';
 import { AdminModule } from '../modules/admin/admin.module';
 import { AgentModule } from '../modules/agent/agent.module';
-import { AIModule } from '../modules/ai';
+import { AIModule } from '../modules/ai/ai.module';
 import { AnalyticsModule } from '../modules/analytics/analytics.module';
 import { ArtifactsModule } from '../modules/artifacts';
 import { AuthModule } from '../modules/auth';

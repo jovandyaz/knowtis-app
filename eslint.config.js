@@ -187,6 +187,31 @@ export default defineConfig([
       ],
     },
   },
+  // The step loop and its budgets are plain functions the orchestrator adapter drives.
+  {
+    basePath: workspaceRoot,
+    files: ['apps/api/src/modules/agent/infrastructure/orchestrator/*.ts'],
+    ignores: [
+      '**/*.spec.ts',
+      '**/agent-tool.registry.ts',
+      '**/ai-sdk-agent.orchestrator.ts',
+      '**/mutation-proposal.builder.ts',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@nestjs/*'],
+              message:
+                'The step loop stays framework-free; take a StepLogger or a plain function instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // A source-only package can only hand its ambient module declarations to
   // consumers through a reference directive; imports cannot reach a .d.ts.
   {

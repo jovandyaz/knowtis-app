@@ -105,10 +105,6 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     const { userId } = input.execution.subject;
     const turnStartedAt = Date.now();
     const sources = new Map<string, AgentSource>();
-    const knownNotes = new Map<string, AgentSource>();
-    for (const note of input.knownNotes ?? []) {
-      knownNotes.set(note.id, note);
-    }
     const proposals = new ProposalCollector();
     const webSources = new WebSourceCollector();
     const webFetchAllowlist = new WebFetchAllowlist();
@@ -196,7 +192,6 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         deadlineAt: options.deadlineAt,
       },
       sources,
-      knownNotes,
       proposals,
       webSources,
     });

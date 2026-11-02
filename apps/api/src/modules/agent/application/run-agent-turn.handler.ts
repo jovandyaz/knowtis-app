@@ -185,7 +185,6 @@ export interface RunAgentTurnCallbacks {
     model: string;
     costUsd: number;
     sources: readonly AgentSource[];
-    knownNotes: readonly AgentSource[];
     webSources: readonly WebSource[];
     stopReason: AgentStopReason;
     /** The turn stopped at a checkpoint and the caller has a message left to continue it. */
@@ -749,7 +748,6 @@ export class RunAgentTurnHandler {
           model: event.usage.model,
           costUsd,
           sources: [],
-          knownNotes: [],
           webSources: [],
           stopReason: AGENT_STOP_REASON.COMPLETED,
           continuable: false,
@@ -1247,7 +1245,6 @@ export class RunAgentTurnHandler {
               model: event.usage.model,
               costUsd,
               sources: event.sources,
-              knownNotes: event.knownNotes,
               webSources: event.webSources,
               stopReason: event.stopReason,
               continuable,

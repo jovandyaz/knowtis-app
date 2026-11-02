@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { AIModule } from '../ai';
+import { AIModule } from '../ai/ai.module';
 import { NotesModule } from '../notes';
 import { DeleteArtifactHandler } from './application/commands/delete-artifact.handler';
 import { GenerateArtifactHandler } from './application/commands/generate-artifact.handler';

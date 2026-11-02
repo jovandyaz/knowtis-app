@@ -218,7 +218,6 @@ describe('useAgentStore', () => {
     get().onDone({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [{ id: 'n1', title: 'Productividad' }],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     });
@@ -236,7 +235,6 @@ describe('useAgentStore', () => {
     get().onDone({
       usage: USAGE,
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'token_budget',
     });
@@ -259,7 +257,6 @@ describe('useAgentStore', () => {
     staleDone({
       usage: USAGE,
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'token_budget',
     });
@@ -276,7 +273,6 @@ describe('useAgentStore', () => {
     first.get().onDone({
       usage: USAGE,
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'length',
     });
@@ -296,7 +292,6 @@ describe('useAgentStore', () => {
     get().onDone({
       usage: { inputTokens: 1, outputTokens: 2, model: 'private', costUsd: 3 },
       sources: [{ id: 'private-id', title: 'Private title' }],
-      knownNotes: [],
       webSources: [{ title: 'Private source', url: 'https://example.com' }],
       stopReason: 'completed',
     });
@@ -315,7 +310,6 @@ describe('useAgentStore', () => {
     get().onDone({
       usage: { inputTokens: 0, outputTokens: 0, model: 'm', costUsd: 0 },
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     });
@@ -330,7 +324,6 @@ describe('useAgentStore', () => {
     get().onDone({
       usage: { inputTokens: 0, outputTokens: 0, model: 'm', costUsd: 0 },
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     });
@@ -345,7 +338,6 @@ describe('useAgentStore', () => {
     get().onDone({
       usage: { inputTokens: 0, outputTokens: 0, model: 'm', costUsd: 0 },
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     });
@@ -365,7 +357,6 @@ describe('useAgentStore', () => {
     staleDone({
       usage: { inputTokens: 0, outputTokens: 0, model: 'm', costUsd: 0 },
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     });
@@ -397,7 +388,6 @@ describe('useAgentStore', () => {
     get().onDone({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     });
@@ -597,7 +587,6 @@ describe('useAgentStore', () => {
     const DONE: AgentDonePayload = {
       usage: USAGE,
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     };
@@ -828,7 +817,6 @@ describe('useAgentStore', () => {
       get().onDone({
         usage: USAGE,
         sources: [],
-        knownNotes: [],
         webSources: [],
         stopReason: 'completed',
       });
@@ -894,7 +882,6 @@ describe('useAgentStore', () => {
     const DONE: AgentDonePayload = {
       usage: USAGE,
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     };
@@ -965,7 +952,6 @@ describe('useAgentStore', () => {
     const DONE = {
       usage: USAGE,
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed' as const,
     };
@@ -1348,7 +1334,6 @@ describe('agent.store server-authoritative wire', () => {
     get().onDone({
       usage: USAGE,
       sources: [],
-      knownNotes: [],
       webSources: [],
       stopReason: 'completed',
     });
@@ -1395,7 +1380,6 @@ describe('agent.store server-authoritative wire', () => {
           cbs.onDone({
             usage: USAGE,
             sources: [],
-            knownNotes: [],
             webSources: [],
             stopReason: 'completed',
           }),
@@ -1816,7 +1800,6 @@ describe('agent.store server-authoritative wire', () => {
         { id: 'n1', title: 'Productividad' },
         { id: 'n2', title: 'Ideas' },
       ],
-      knownNotes: [],
       webSources: [{ title: 'MDN', url: 'https://developer.mozilla.org' }],
       stopReason: 'completed',
     });
@@ -2081,7 +2064,6 @@ describe('agent.store thinking tail', () => {
   const DONE: AgentDonePayload = {
     usage: USAGE,
     sources: [],
-    knownNotes: [],
     webSources: [],
     stopReason: 'completed',
   };
@@ -2304,7 +2286,6 @@ describe('agent.store the continue offer', () => {
   const DONE: AgentDonePayload = {
     usage: USAGE,
     sources: [],
-    knownNotes: [],
     webSources: [],
     stopReason: 'completed',
   };
@@ -2448,7 +2429,6 @@ describe('agent.store continuing a capped turn', () => {
   const CAPPED: AgentDonePayload = {
     usage: USAGE,
     sources: [],
-    knownNotes: [],
     webSources: [],
     stopReason: 'max_steps',
     continuable: true,
@@ -2936,7 +2916,6 @@ describe('agent.store a reply served by a fallback model', () => {
   const DONE: AgentDonePayload = {
     usage: USAGE,
     sources: [],
-    knownNotes: [],
     webSources: [],
     stopReason: 'completed',
   };
@@ -3074,7 +3053,6 @@ describe('agent.store the memories a reply used', () => {
   const DONE: AgentDonePayload = {
     usage: USAGE,
     sources: [],
-    knownNotes: [],
     webSources: [],
     stopReason: 'completed',
   };
