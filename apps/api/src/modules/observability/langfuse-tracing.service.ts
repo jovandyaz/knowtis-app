@@ -12,6 +12,7 @@ import { registerTelemetry } from 'ai';
 
 import type { EnvConfig } from '../../config/env.config';
 import { reasonOf } from '../../core/errors/reason-of';
+import { ErrorScrubbingSpanProcessor } from './error-scrubbing-span-processor';
 
 /** How long shutdown waits for pending spans to export before it drops them. */
 export const LANGFUSE_SHUTDOWN_TIMEOUT_MS = 1_000;
@@ -43,7 +44,9 @@ export class LangfuseTracingService
         baseUrl: this.configService.get('LANGFUSE_BASE_URL'),
         environment: this.configService.get('NODE_ENV'),
       });
-      this.sdk = new NodeSDK({ spanProcessors: [this.spanProcessor] });
+      this.sdk = new NodeSDK({
+        spanProcessors: [new ErrorScrubbingSpanProcessor(this.spanProcessor)],
+      });
       this.sdk.start();
       // AI SDK 7 emits no telemetry at all until an integration is registered.
       registerTelemetry(new LangfuseVercelAiSdkIntegration());
