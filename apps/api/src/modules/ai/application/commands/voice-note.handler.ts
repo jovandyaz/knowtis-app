@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
+import { MODEL_CATALOG, type ModelCatalog } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { err, ok, type Result } from 'neverthrow';
 
-import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import { AI_ACTION } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';

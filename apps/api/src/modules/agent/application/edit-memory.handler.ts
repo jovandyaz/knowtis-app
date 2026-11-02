@@ -1,7 +1,7 @@
+import { estimateTokenCount } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { estimateTokenCount } from '@knowtis/ai-gateway';
 import type {
   MemoryEditRejectionReason,
   MemoryEditUnavailableReason,

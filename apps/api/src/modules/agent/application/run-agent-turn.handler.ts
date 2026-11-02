@@ -1,7 +1,3 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-
 import {
   computeTokenCostUsd,
   detectPromptInjection,
@@ -9,7 +5,11 @@ import {
   MODEL_CATALOG,
   providerOf,
   type ModelCatalog,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+
 import {
   AGENT_STOP_REASON,
   BYOK_KEY_FAILURE_KIND,

@@ -1,6 +1,5 @@
+import type { ChainScope } from '@jovandyaz/ai-gateway';
 import type { ZodType } from 'zod';
-
-import type { ChainScope } from '@knowtis/ai-gateway';
 
 import type { AITelemetryContext } from './ai-provider.port';
 

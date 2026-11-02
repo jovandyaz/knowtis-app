@@ -1,4 +1,4 @@
-import { MAX_GUARD_INPUT_CHARS } from '@knowtis/ai-gateway';
+import { MAX_GUARD_INPUT_CHARS } from '@jovandyaz/ai-gateway';
 
 import type { AgentMessage } from './agent-message';
 

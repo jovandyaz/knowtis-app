@@ -1,3 +1,4 @@
+import { estimateTokenCount } from '@jovandyaz/ai-gateway';
 import { CurrentUser, JwtAuthGuard } from '@jovandyaz/auth-nestjs';
 import type { RequestUser } from '@jovandyaz/auth/server';
 import {
@@ -21,7 +22,6 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 
-import { estimateTokenCount } from '@knowtis/ai-gateway';
 import { SUBJECTS } from '@knowtis/authorization';
 
 import { clientIpOf } from '../../core/http/client-ip';

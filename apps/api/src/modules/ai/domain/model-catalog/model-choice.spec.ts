@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   MODEL_INDEX_SNAPSHOT,
   ModelIndexCatalog,
   type IndexedModel,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { describe, expect, it } from 'vitest';
+
 import type {
   AccessTier,
   ByokProvider,

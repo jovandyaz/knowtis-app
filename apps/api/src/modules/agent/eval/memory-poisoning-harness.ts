@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import { Test, type TestingModule } from '@nestjs/testing';
-
 import {
   computeTokenCostUsd,
   MODEL_CATALOG,
   type ModelCatalog,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Test, type TestingModule } from '@nestjs/testing';
 
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import {

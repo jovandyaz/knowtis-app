@@ -1,4 +1,4 @@
-import { computeTokenCostUsd, type ModelPricing } from '@knowtis/ai-gateway';
+import { computeTokenCostUsd, type ModelPricing } from '@jovandyaz/ai-gateway';
 
 interface TokenUsageInput {
   readonly inputTokens: number;

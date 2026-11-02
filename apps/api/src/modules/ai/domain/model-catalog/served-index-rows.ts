@@ -1,4 +1,4 @@
-import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@knowtis/ai-gateway';
+import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@jovandyaz/ai-gateway';
 
 /** The rows the index serves: each provider's listed rows, or its vendored snapshot rows while it lists none. A provider's listed rows replace its snapshot rows entirely. */
 export function servedIndexRows(

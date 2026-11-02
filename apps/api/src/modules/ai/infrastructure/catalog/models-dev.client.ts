@@ -1,13 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { z } from 'zod';
-
 import {
   enrichmentFromModelsDev,
   fromModelsDev,
   MODELS_DEV_PROVIDERS,
   type IndexedModel,
   type ModelsDevEnrichment,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Injectable, Logger } from '@nestjs/common';
+import { z } from 'zod';
 
 import {
   DISCARD_LOG_SAMPLE_SIZE,

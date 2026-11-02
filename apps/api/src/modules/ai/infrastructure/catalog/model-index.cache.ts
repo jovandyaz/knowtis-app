@@ -1,6 +1,3 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Interval } from '@nestjs/schedule';
-
 import {
   MODEL_INDEX_SNAPSHOT,
   ModelIndexCatalog,
@@ -8,7 +5,9 @@ import {
   type ModelCatalog,
   type ModelContextWindow,
   type ModelPricing,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Interval } from '@nestjs/schedule';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { servedIndexRows } from '../../domain/model-catalog/served-index-rows';

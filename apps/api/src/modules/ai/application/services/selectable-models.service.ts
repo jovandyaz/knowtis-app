@@ -1,11 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
-
 import {
   MODEL_CATALOG,
   providerOf,
   type ModelCatalog,
   type ModelIndexCatalog,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Inject, Injectable } from '@nestjs/common';
+
 import {
   DEFAULT_MODEL_INTENT,
   type ByokProvider,

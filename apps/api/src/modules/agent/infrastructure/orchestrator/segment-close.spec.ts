@@ -1,6 +1,5 @@
+import type { ModelPricing } from '@jovandyaz/ai-gateway';
 import { describe, expect, it } from 'vitest';
-
-import type { ModelPricing } from '@knowtis/ai-gateway';
 
 import { firstCallRoom } from '../../domain/first-call-budget';
 import { estimateMessageTokens } from '../../domain/message-tokens';

@@ -1,4 +1,5 @@
-import { providerOf } from '@knowtis/ai-gateway';
+import { providerOf } from '@jovandyaz/ai-gateway';
+
 import { BYOK_PROVIDERS, type ByokProvider } from '@knowtis/shared-types';
 
 import { slugOf } from './catalog-model';

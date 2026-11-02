@@ -1,6 +1,6 @@
+import { INDEX_PROVIDERS, providerOf } from '@jovandyaz/ai-gateway';
 import { Injectable } from '@nestjs/common';
 
-import { INDEX_PROVIDERS, providerOf } from '@knowtis/ai-gateway';
 import type { AssignableModelDto, ModelTier } from '@knowtis/shared-types';
 
 import { toPickerLabel } from '../../domain/model-catalog/index-label';

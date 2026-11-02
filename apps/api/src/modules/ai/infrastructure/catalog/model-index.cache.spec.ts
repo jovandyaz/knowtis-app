@@ -1,12 +1,11 @@
-import { Logger } from '@nestjs/common';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
 import {
   INDEX_PROVIDERS,
   MODEL_INDEX_SNAPSHOT,
   ModelIndexCatalog,
   type IndexedModel,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Logger } from '@nestjs/common';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createIndexedModel } from '../../testing/create-indexed-model';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';

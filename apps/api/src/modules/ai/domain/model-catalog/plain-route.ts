@@ -1,4 +1,4 @@
-import { deriveCanonical, providerOf } from '@knowtis/ai-gateway';
+import { deriveCanonical, providerOf } from '@jovandyaz/ai-gateway';
 
 import { OPENROUTER_ID_PREFIX, slugOf } from './catalog-model';
 

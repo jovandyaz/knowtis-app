@@ -1,8 +1,8 @@
+import { MODEL_CATALOG, type ModelCatalog } from '@jovandyaz/ai-gateway';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
 
-import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
   CHAIN_SEPARATOR,
   GLOBAL_REASONING_EFFORTS,

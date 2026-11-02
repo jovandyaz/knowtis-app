@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-import type { IndexedModel, ModelIndexCatalog } from '@knowtis/ai-gateway';
+import type { IndexedModel, ModelIndexCatalog } from '@jovandyaz/ai-gateway';
 
 import { unservedFloorModels } from '../modules/ai/domain/model-catalog/floor-models';
 import type { ModelsDevCatalog } from '../modules/ai/domain/ports/models-dev.port';

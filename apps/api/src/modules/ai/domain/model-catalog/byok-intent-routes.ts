@@ -1,4 +1,5 @@
-import type { IndexedModel } from '@knowtis/ai-gateway';
+import type { IndexedModel } from '@jovandyaz/ai-gateway';
+
 import {
   BYOK_PROVIDERS,
   type ByokProvider,

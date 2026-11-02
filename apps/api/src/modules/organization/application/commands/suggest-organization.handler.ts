@@ -1,17 +1,17 @@
 import { randomUUID } from 'node:crypto';
 
-import { UserId } from '@jovandyaz/auth/server';
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { err, ok, type Result } from 'neverthrow';
-
 import {
   computeTokenCostUsd,
   detectPromptInjection,
   MODEL_CATALOG,
   sanitizeContent,
   type ModelCatalog,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { UserId } from '@jovandyaz/auth/server';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { err, ok, type Result } from 'neverthrow';
+
 import {
   AI_ACTION,
   isClassifiable,

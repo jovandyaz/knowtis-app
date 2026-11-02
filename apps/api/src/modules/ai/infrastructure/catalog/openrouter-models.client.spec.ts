@@ -1,7 +1,6 @@
+import { MAX_INT32 } from '@jovandyaz/ai-gateway';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { MAX_INT32 } from '@knowtis/ai-gateway';
 
 import {
   MAX_MODEL_PAGES,

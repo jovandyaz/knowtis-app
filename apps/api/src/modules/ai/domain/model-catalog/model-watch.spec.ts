@@ -1,9 +1,8 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   MODEL_INDEX_SNAPSHOT_DATE,
   type IndexedModel,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { describe, expect, it } from 'vitest';
 
 import { createIndexedModel } from '../../testing/create-indexed-model';
 import { seededResolution } from '../../testing/platform-resolutions';

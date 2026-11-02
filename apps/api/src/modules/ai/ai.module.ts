@@ -1,12 +1,11 @@
 import { join } from 'node:path';
 
+import { MODEL_CATALOG } from '@jovandyaz/ai-gateway';
 import { TokenHasher } from '@jovandyaz/auth-nestjs';
 import { CacheModule } from '@nestjs/cache-manager';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-
-import { MODEL_CATALOG } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../config/env.config';
 import { AdminAuditModule } from '../admin/audit/admin-audit.module';

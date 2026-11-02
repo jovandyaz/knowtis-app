@@ -1,8 +1,8 @@
+import { OPENROUTER_PROVIDER, type IndexedModel } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { Sql } from 'postgres';
 
-import { OPENROUTER_PROVIDER, type IndexedModel } from '@knowtis/ai-gateway';
 import {
   PROMOTED_STATUS,
   type CatalogSyncResultDto,

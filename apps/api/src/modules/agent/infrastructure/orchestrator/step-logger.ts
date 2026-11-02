@@ -1,4 +1,4 @@
-import type { GatewayLogger } from '@knowtis/ai-gateway';
+import type { GatewayLogger } from '@jovandyaz/ai-gateway';
 
 /** The Nest `Logger` satisfies this, so the step loop never imports the framework. */
 export interface StepLogger extends GatewayLogger {

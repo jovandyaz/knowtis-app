@@ -1,12 +1,11 @@
 import 'reflect-metadata';
 
+import { MODEL_CATALOG } from '@jovandyaz/ai-gateway';
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { Assertion } from 'promptfoo';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ZodType } from 'zod';
-
-import { MODEL_CATALOG } from '@knowtis/ai-gateway';
 
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { InjectionClassifierService } from '../../ai/application/services/injection-classifier.service';

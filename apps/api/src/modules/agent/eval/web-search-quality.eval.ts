@@ -1,11 +1,10 @@
 import 'reflect-metadata';
 
+import { MODEL_CATALOG, type ModelCatalog } from '@jovandyaz/ai-gateway';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { config as loadEnv } from 'dotenv';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-
-import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../config/env.config';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';

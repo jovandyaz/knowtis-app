@@ -1,11 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import {
   INDEX_PROVIDERS,
   MODEL_INDEX_SNAPSHOT,
   type IndexedModel,
   type IndexProvider,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';

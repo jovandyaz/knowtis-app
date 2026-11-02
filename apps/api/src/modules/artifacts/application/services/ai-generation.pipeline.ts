@@ -1,14 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { err, ok, type Result } from 'neverthrow';
-import type { ZodType } from 'zod';
-
 import {
   computeTokenCostUsd,
   MODEL_CATALOG,
   type ModelCatalog,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { err, ok, type Result } from 'neverthrow';
+import type { ZodType } from 'zod';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIOrchestrator } from '../../../ai/application/services/ai-orchestrator.service';

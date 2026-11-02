@@ -2,7 +2,7 @@ import {
   ModelIndexCatalog,
   type IndexedModel,
   type ModelCatalog,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
 
 import { createIndexedModel } from './create-indexed-model';
 

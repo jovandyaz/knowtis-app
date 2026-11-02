@@ -1,6 +1,5 @@
+import { detectAiInput, MAX_GUARD_INPUT_CHARS } from '@jovandyaz/ai-gateway';
 import { describe, expect, it } from 'vitest';
-
-import { detectAiInput, MAX_GUARD_INPUT_CHARS } from '@knowtis/ai-gateway';
 
 import { AGENT_HISTORY_TOKEN_BUDGET } from '../application/run-agent-turn.handler';
 import type { AgentMessage } from '../domain/agent-message';

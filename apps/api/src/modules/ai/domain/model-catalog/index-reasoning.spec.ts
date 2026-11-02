@@ -1,6 +1,5 @@
+import type { IndexedReasoning } from '@jovandyaz/ai-gateway';
 import { describe, expect, it } from 'vitest';
-
-import type { IndexedReasoning } from '@knowtis/ai-gateway';
 
 import { createSnapshotIndex } from '../../testing/snapshot-index';
 import { toModelReasoning } from './index-reasoning';

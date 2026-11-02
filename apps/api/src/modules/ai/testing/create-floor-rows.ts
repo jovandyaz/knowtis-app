@@ -1,4 +1,5 @@
-import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@knowtis/ai-gateway';
+import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@jovandyaz/ai-gateway';
+
 import { BYOK_PROVIDERS, MODEL_INTENTS } from '@knowtis/shared-types';
 
 import {

@@ -1,8 +1,7 @@
+import { streamWithChain } from '@jovandyaz/ai-gateway';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ModelMessage, ToolSet } from 'ai';
-
-import { streamWithChain } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { FallbackChainService } from '../../../ai/infrastructure/providers/fallback-chain.service';

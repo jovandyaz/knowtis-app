@@ -492,7 +492,7 @@ awareness.setLocalStateField('cursor', { anchor, head });
 
 ## Copilot Agent
 
-The **copilot** is a conversational, tool-using agent that lives in its own `agent` NestJS module — distinct from the `ai` module, which serves single-shot editor completions. It talks to the client over a dedicated Socket.io namespace (`/agent`) and shares the framework-free `@knowtis/ai-gateway` core (provider fallback chain, prompt-injection guard, token costing) with every other AI path.
+The **copilot** is a conversational, tool-using agent that lives in its own `agent` NestJS module — distinct from the `ai` module, which serves single-shot editor completions. It talks to the client over a dedicated Socket.io namespace (`/agent`) and shares the framework-free `@jovandyaz/ai-gateway` core (provider fallback chain, prompt-injection guard, token costing) with every other AI path.
 
 ### Agent loop
 

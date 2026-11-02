@@ -2,7 +2,7 @@ import {
   ModelIndexCatalog,
   type IndexedModel,
   type IndexProvider,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
 
 import { floorModelsLost } from './floor-models';
 

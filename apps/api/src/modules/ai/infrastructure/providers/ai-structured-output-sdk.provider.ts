@@ -1,8 +1,8 @@
+import { executeWithChain } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { generateText, Output } from 'ai';
 import type { ZodType } from 'zod';
 
-import { executeWithChain } from '@knowtis/ai-gateway';
 import { pickDefined } from '@knowtis/shared-util';
 
 import type {

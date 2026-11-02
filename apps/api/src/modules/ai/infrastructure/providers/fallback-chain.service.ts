@@ -1,4 +1,10 @@
 import {
+  ProviderCooldownTracker,
+  providerOf,
+  resolveChainCandidates,
+  type ChainScope,
+} from '@jovandyaz/ai-gateway';
+import {
   Inject,
   Injectable,
   Logger,
@@ -6,13 +12,6 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-
-import {
-  ProviderCooldownTracker,
-  providerOf,
-  resolveChainCandidates,
-  type ChainScope,
-} from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { WebhookAlertService } from '../alerting/webhook-alert.service';

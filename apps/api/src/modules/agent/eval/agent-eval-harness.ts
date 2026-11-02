@@ -1,12 +1,11 @@
-import { ConfigService } from '@nestjs/config';
-import { Test, type TestingModule } from '@nestjs/testing';
-
 import {
   computeTokenCostUsd,
   MODEL_CATALOG,
   type AiInputDisposition,
   type ModelCatalog,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { ConfigService } from '@nestjs/config';
+import { Test, type TestingModule } from '@nestjs/testing';
 
 import type { EnvConfig } from '../../../config/env.config';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';

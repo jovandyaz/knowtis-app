@@ -1,6 +1,6 @@
+import { providerOf } from '@jovandyaz/ai-gateway';
 import { describe, expect, it, vi } from 'vitest';
 
-import { providerOf } from '@knowtis/ai-gateway';
 import type {
   ByokProvider,
   ModelReasoning,

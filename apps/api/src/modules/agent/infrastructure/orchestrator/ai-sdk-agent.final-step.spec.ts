@@ -1,10 +1,9 @@
+import type { ModelPricing } from '@jovandyaz/ai-gateway';
 import { Logger } from '@nestjs/common';
 import { simulateReadableStream, tool, type ToolModelMessage } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-
-import type { ModelPricing } from '@knowtis/ai-gateway';
 
 import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { createMockConfig } from '../../../ai/testing/create-mock-config';

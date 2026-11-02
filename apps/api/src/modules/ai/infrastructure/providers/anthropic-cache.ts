@@ -1,4 +1,4 @@
-import { providerOf } from '@knowtis/ai-gateway';
+import { providerOf } from '@jovandyaz/ai-gateway';
 
 const EPHEMERAL = {
   anthropic: { cacheControl: { type: 'ephemeral' as const } },

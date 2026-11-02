@@ -1,4 +1,4 @@
-import { estimateTokenCount } from '@knowtis/ai-gateway';
+import { estimateTokenCount } from '@jovandyaz/ai-gateway';
 
 import type { AgentMessage } from './agent-message';
 

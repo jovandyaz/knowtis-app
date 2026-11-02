@@ -1,4 +1,5 @@
-import { providerOf } from '@knowtis/ai-gateway';
+import { providerOf } from '@jovandyaz/ai-gateway';
+
 import type { CatalogModelStatus, ModelTier } from '@knowtis/shared-types';
 
 /** Namespace every OpenRouter model id carries: this prefix followed by the upstream slug. */

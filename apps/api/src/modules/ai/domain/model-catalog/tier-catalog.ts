@@ -1,4 +1,5 @@
-import { providerOf, type IndexedModel } from '@knowtis/ai-gateway';
+import { providerOf, type IndexedModel } from '@jovandyaz/ai-gateway';
+
 import {
   DEFAULT_MODEL_INTENT,
   MODEL_INTENTS,

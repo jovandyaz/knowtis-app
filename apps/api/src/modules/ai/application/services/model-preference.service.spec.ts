@@ -1,3 +1,4 @@
+import { MODEL_INDEX_SNAPSHOT } from '@jovandyaz/ai-gateway';
 import {
   BadRequestException,
   ForbiddenException,
@@ -5,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MODEL_INDEX_SNAPSHOT } from '@knowtis/ai-gateway';
 import {
   MODEL_INTENTS,
   type ByokProvider,

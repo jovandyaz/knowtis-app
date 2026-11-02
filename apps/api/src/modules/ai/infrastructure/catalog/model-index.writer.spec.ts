@@ -1,6 +1,3 @@
-import { Logger } from '@nestjs/common';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import {
   fromOpenRouter,
   INDEX_PROVIDERS,
@@ -10,7 +7,10 @@ import {
   type IndexedModel,
   type IndexProvider,
   type ModelsDevEnrichment,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Logger } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { INTENT_FALLBACK_ORDER, MODEL_INTENTS } from '@knowtis/shared-types';
 
 import {

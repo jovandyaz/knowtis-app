@@ -1,6 +1,6 @@
+import { OPENROUTER_PROVIDER, providerOf } from '@jovandyaz/ai-gateway';
 import { Injectable, Logger } from '@nestjs/common';
 
-import { OPENROUTER_PROVIDER, providerOf } from '@knowtis/ai-gateway';
 import type { ModelReasoning, ReasoningEffort } from '@knowtis/shared-types';
 
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';

@@ -1,8 +1,7 @@
+import type { IndexedModel, IndexProvider } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, isNull, lt, max, notInArray, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
-
-import type { IndexedModel, IndexProvider } from '@knowtis/ai-gateway';
 
 import {
   aiModelIndex,

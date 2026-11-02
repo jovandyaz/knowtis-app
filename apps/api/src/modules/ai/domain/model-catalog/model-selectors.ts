@@ -5,7 +5,8 @@ import {
   type IndexProvider,
   type MODELS_DEV_PROVIDERS,
   type ModelStatus,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+
 import {
   MODEL_INTENTS,
   type ByokProvider,

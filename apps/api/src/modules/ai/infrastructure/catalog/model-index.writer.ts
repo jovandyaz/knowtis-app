@@ -1,5 +1,3 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-
 import {
   fromOpenRouter,
   MAX_INT32,
@@ -7,7 +5,8 @@ import {
   type IndexedModel,
   type IndexProvider,
   type ModelsDevEnrichment,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import {
   AI_MODEL_INDEX_COST_CEILING,

@@ -1,15 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { err, ok, type Result } from 'neverthrow';
-
 import {
   computeTokenCostUsd,
   detectPromptInjection,
   estimateTokenCount,
   MODEL_CATALOG,
   type ModelCatalog,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { err, ok, type Result } from 'neverthrow';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';

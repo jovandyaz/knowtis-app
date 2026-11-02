@@ -1,13 +1,12 @@
 import { readFileSync } from 'node:fs';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import {
   MODEL_INDEX_SNAPSHOT,
   MODEL_INDEX_SNAPSHOT_DATE,
   ModelIndexCatalog,
   type IndexedModel,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SELECTOR_KEY_BY_INTENT } from '../modules/ai/domain/model-catalog/platform-resolution';
 import type { ModelsDevCatalog } from '../modules/ai/domain/ports/models-dev.port';

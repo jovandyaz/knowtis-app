@@ -1,7 +1,6 @@
+import { OPENROUTER_PROVIDER } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-
-import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { stackOf } from '../../../../core/errors/stack-of';

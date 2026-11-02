@@ -1,6 +1,5 @@
+import { MODEL_INDEX_SNAPSHOT, ModelIndexCatalog } from '@jovandyaz/ai-gateway';
 import { describe, expect, it } from 'vitest';
-
-import { MODEL_INDEX_SNAPSHOT, ModelIndexCatalog } from '@knowtis/ai-gateway';
 
 import { unservedFloorModels } from '../../domain/model-catalog/floor-models';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
