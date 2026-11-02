@@ -1,10 +1,9 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   detectAiInput,
   MAX_GUARD_INPUT_CHARS,
   MAX_GUARD_SCAN_CHARS,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { describe, expect, it } from 'vitest';
 
 import { toModelMessages } from '../infrastructure/orchestrator/message-mapper';
 import {

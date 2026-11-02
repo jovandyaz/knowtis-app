@@ -1,6 +1,5 @@
+import { detectPromptInjection } from '@jovandyaz/ai-gateway';
 import { Injectable } from '@nestjs/common';
-
-import { detectPromptInjection } from '@knowtis/ai-gateway';
 
 import {
   INJECTION_GRAY_ZONE_MIN,

@@ -1,7 +1,6 @@
+import { OPENROUTER_PROVIDER } from '@jovandyaz/ai-gateway';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
 
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';

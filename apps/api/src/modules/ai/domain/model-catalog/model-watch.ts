@@ -1,4 +1,5 @@
-import { OPENROUTER_PROVIDER, type IndexedModel } from '@knowtis/ai-gateway';
+import { OPENROUTER_PROVIDER, type IndexedModel } from '@jovandyaz/ai-gateway';
+
 import {
   BYOK_PROVIDERS,
   MODEL_INTENTS,

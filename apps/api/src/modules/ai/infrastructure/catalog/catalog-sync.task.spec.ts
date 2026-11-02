@@ -1,13 +1,13 @@
-import { Logger } from '@nestjs/common';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import {
   MODEL_INDEX_SNAPSHOT,
   MODEL_INDEX_SNAPSHOT_DATE,
   MODELS_DEV_PROVIDERS,
   OPENROUTER_PROVIDER,
   type IndexedModel,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Logger } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { INTENT_FALLBACK_ORDER } from '@knowtis/shared-types';
 
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';

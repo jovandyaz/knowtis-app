@@ -1,17 +1,17 @@
 import {
+  cooldownKeyOf,
+  isAbortError,
+  isOverloadedError,
+  providerOf,
+  type ProviderCooldown,
+} from '@jovandyaz/ai-gateway';
+import {
   pruneMessages,
   type ModelMessage,
   type TelemetryOptions,
   type ToolSet,
 } from 'ai';
 
-import {
-  cooldownKeyOf,
-  isAbortError,
-  isOverloadedError,
-  providerOf,
-  type ProviderCooldown,
-} from '@knowtis/ai-gateway';
 import {
   AGENT_STOP_REASON,
   isByokProvider,

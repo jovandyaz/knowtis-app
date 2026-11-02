@@ -1,3 +1,4 @@
+import { isOverloadedError } from '@jovandyaz/ai-gateway';
 import {
   isStepCount,
   streamText,
@@ -7,8 +8,6 @@ import {
   type TelemetryOptions,
   type ToolSet,
 } from 'ai';
-
-import { isOverloadedError } from '@knowtis/ai-gateway';
 
 import {
   databaseDiagnostics,

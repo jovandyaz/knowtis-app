@@ -1,4 +1,5 @@
-import type { IndexedReasoning } from '@knowtis/ai-gateway';
+import type { IndexedReasoning } from '@jovandyaz/ai-gateway';
+
 import { REASONING_EFFORTS, type ModelReasoning } from '@knowtis/shared-types';
 
 /** The effort level that means reasoning can be switched off. */

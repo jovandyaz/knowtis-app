@@ -1,7 +1,6 @@
+import { executeWithChain, streamWithChain } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { generateText, streamText } from 'ai';
-
-import { executeWithChain, streamWithChain } from '@knowtis/ai-gateway';
 
 import type {
   AICompletionProvider,

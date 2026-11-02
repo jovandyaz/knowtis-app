@@ -1,6 +1,5 @@
+import { MAX_GUARD_INPUT_CHARS } from '@jovandyaz/ai-gateway';
 import { describe, expect, it, vi } from 'vitest';
-
-import { MAX_GUARD_INPUT_CHARS } from '@knowtis/ai-gateway';
 
 import type { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import type { InjectionClassifierService } from '../../../ai/application/services/injection-classifier.service';

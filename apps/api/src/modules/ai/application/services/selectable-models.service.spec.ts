@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import {
   MODEL_INDEX_SNAPSHOT,
   ModelIndexCatalog,
   type IndexedModel,
   type ModelCatalog,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   MODEL_INTENTS,
   type ByokProvider,

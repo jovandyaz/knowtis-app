@@ -1,8 +1,8 @@
+import { detectPromptInjection } from '@jovandyaz/ai-gateway';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 
-import { detectPromptInjection } from '@knowtis/ai-gateway';
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 

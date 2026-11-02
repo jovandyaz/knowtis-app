@@ -1,6 +1,5 @@
+import { providerOf } from '@jovandyaz/ai-gateway';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { providerOf } from '@knowtis/ai-gateway';
 
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import type { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';

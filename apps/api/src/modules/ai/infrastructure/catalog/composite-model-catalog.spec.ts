@@ -1,8 +1,7 @@
+import { MODEL_CATALOG, type IndexedModel } from '@jovandyaz/ai-gateway';
 import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import { MODEL_CATALOG, type IndexedModel } from '@knowtis/ai-gateway';
 
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { AI_CATALOG_REPOSITORY } from '../../domain/ports/ai-catalog.repository';

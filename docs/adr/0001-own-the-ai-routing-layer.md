@@ -16,7 +16,7 @@ A gateway that works per HTTP request sees one call at a time. It cannot tell wh
 
 Keep routing in-process, built on the Vercel AI SDK:
 
-- `@knowtis/ai-gateway` owns the fallback chain and provider cooldowns.
+- `@jovandyaz/ai-gateway` owns the fallback chain and provider cooldowns.
 - The agent module owns the step loop: one `streamText` call per step, each with its own time-to-first-token and silence budgets.
 - A failing first step moves to the next candidate through the chain. A continuation step gets a bounded retry on its own model. If it stays silent or errors before streaming anything, it moves on too, replaying the threaded history without re-running tools.
 

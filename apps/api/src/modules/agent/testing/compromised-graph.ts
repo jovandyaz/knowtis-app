@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
+import { MODEL_CATALOG } from '@jovandyaz/ai-gateway';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { vi } from 'vitest';
-
-import { MODEL_CATALOG } from '@knowtis/ai-gateway';
 
 import {
   DATABASE_CONNECTION,

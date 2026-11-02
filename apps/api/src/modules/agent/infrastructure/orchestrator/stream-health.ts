@@ -1,4 +1,4 @@
-import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
+import { OPENROUTER_PROVIDER } from '@jovandyaz/ai-gateway';
 
 import type { StepLogger } from './step-logger';
 

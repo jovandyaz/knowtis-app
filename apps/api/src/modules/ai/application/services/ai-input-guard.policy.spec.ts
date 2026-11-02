@@ -1,10 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
-
 import {
   AI_INPUT_DISPOSITION,
   detectAiInput,
   type AiInputDisposition,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { describe, expect, it, vi } from 'vitest';
 
 import { logInputDetections } from './ai-input-guard.policy';
 

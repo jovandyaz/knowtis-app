@@ -1,7 +1,7 @@
+import { MAX_INT32 } from '@jovandyaz/ai-gateway';
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 
-import { MAX_INT32 } from '@knowtis/ai-gateway';
 import { isReasoningEffort, type ModelReasoning } from '@knowtis/shared-types';
 
 import {

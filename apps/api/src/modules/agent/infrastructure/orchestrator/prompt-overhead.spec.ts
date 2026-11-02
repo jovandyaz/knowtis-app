@@ -1,7 +1,7 @@
+import { estimateTokenCount } from '@jovandyaz/ai-gateway';
 import { asSchema } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { estimateTokenCount } from '@knowtis/ai-gateway';
 import { MEMORY_MAX_CHARS } from '@knowtis/shared-types';
 
 import { validateEnv } from '../../../../config/env.config';

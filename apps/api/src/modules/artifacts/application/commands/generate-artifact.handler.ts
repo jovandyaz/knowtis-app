@@ -1,9 +1,9 @@
+import { estimateTokenCount, sanitizeContent } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType } from 'zod';
 
-import { estimateTokenCount, sanitizeContent } from '@knowtis/ai-gateway';
 import {
   AI_ACTION,
   type ArtifactContent,

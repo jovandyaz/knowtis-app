@@ -1,4 +1,4 @@
-import type { IndexedModel, IndexProvider } from '@knowtis/ai-gateway';
+import type { IndexedModel, IndexProvider } from '@jovandyaz/ai-gateway';
 
 export const MODEL_INDEX_REPOSITORY = Symbol('MODEL_INDEX_REPOSITORY');
 

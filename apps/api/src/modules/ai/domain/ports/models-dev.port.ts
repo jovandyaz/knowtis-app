@@ -1,4 +1,4 @@
-import type { IndexedModel, ModelsDevEnrichment } from '@knowtis/ai-gateway';
+import type { IndexedModel, ModelsDevEnrichment } from '@jovandyaz/ai-gateway';
 
 export const MODELS_DEV_CLIENT = Symbol('MODELS_DEV_CLIENT');
 

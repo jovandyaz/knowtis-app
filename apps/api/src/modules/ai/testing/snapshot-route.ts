@@ -1,4 +1,5 @@
-import { MODEL_INDEX_SNAPSHOT } from '@knowtis/ai-gateway';
+import { MODEL_INDEX_SNAPSHOT } from '@jovandyaz/ai-gateway';
+
 import type { ByokProvider, ModelIntent } from '@knowtis/shared-types';
 
 import { resolveByokIntent } from '../domain/model-catalog/model-selectors';

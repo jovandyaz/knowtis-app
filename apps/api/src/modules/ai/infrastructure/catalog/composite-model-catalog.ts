@@ -1,10 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
-
 import type {
   ModelCatalog,
   ModelContextWindow,
   ModelPricing,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Injectable, Logger } from '@nestjs/common';
 
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { ModelIndexCache } from './model-index.cache';

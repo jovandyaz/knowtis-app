@@ -1,4 +1,5 @@
-import { providerOf } from '@knowtis/ai-gateway';
+import { providerOf } from '@jovandyaz/ai-gateway';
+
 import {
   DEFAULT_MODEL_INTENT,
   INTENT_FALLBACK_ORDER,

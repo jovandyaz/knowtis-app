@@ -1,6 +1,6 @@
+import { OPENROUTER_PROVIDER } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
-import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
 import {
   MODEL_INTENTS,
   type PlatformResolutionDto,

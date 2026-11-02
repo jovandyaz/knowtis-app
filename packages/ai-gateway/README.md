@@ -1,4 +1,4 @@
-# @knowtis/ai-gateway
+# @jovandyaz/ai-gateway
 
 Framework-free core for multi-provider LLM access: model index and pricing, provider fallback chains, prompt-injection defense, and token/cost estimation. Consumed by the API's `ai`, `agent`, `artifacts`, and `organization` modules behind NestJS ports.
 

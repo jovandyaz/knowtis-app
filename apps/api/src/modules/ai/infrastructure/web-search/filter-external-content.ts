@@ -1,4 +1,4 @@
-import { detectPromptInjection } from '@knowtis/ai-gateway';
+import { detectPromptInjection } from '@jovandyaz/ai-gateway';
 
 import type { WebSearchHit } from '../../domain/ports/web-search.port';
 

@@ -1,3 +1,12 @@
+import {
+  INDEX_PROVIDERS,
+  INDEX_SOURCES,
+  MODEL_STATUSES,
+  type IndexedReasoning,
+  type IndexProvider,
+  type IndexSource,
+  type ModelStatus,
+} from '@jovandyaz/ai-gateway';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -13,15 +22,6 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-import {
-  INDEX_PROVIDERS,
-  INDEX_SOURCES,
-  MODEL_STATUSES,
-  type IndexedReasoning,
-  type IndexProvider,
-  type IndexSource,
-  type ModelStatus,
-} from '@knowtis/ai-gateway';
 import {
   CATALOG_LABEL_MAX_LENGTH,
   MODEL_ID_MAX_LENGTH,

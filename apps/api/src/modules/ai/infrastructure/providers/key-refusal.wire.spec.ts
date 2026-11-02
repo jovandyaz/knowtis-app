@@ -1,7 +1,6 @@
+import { executeWithChain } from '@jovandyaz/ai-gateway';
 import { generateText, streamText, type LanguageModel } from 'ai';
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
-
-import { executeWithChain } from '@knowtis/ai-gateway';
 
 import { createMockConfig } from '../../testing/create-mock-config';
 import { classifyByokKeyFailure } from './byok-key-failure';

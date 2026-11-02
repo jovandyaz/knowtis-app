@@ -1,15 +1,15 @@
-import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import type { EventEmitter2 } from '@nestjs/event-emitter';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
 import {
   detectAiInput,
   detectPromptInjection,
   estimateTokenCount,
   MAX_GUARD_INPUT_CHARS,
   providerOf,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_TURN_ERROR_CODE,

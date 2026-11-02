@@ -1,9 +1,8 @@
+import { MODEL_CATALOG, type ModelCatalog } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
-
-import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';

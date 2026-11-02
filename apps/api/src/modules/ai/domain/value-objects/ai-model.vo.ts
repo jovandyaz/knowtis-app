@@ -1,6 +1,5 @@
+import type { ModelCatalog } from '@jovandyaz/ai-gateway';
 import { err, ok, type Result } from 'neverthrow';
-
-import type { ModelCatalog } from '@knowtis/ai-gateway';
 
 import { AIErrors, type AIDomainError } from '../errors/ai.errors';
 

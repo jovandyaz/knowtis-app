@@ -1,4 +1,5 @@
-import type { ModelPricing } from '@knowtis/ai-gateway';
+import type { ModelPricing } from '@jovandyaz/ai-gateway';
+
 import { AGENT_STOP_REASON } from '@knowtis/shared-types';
 
 import { TokenUsage } from '../../../ai/domain/value-objects/token-usage.vo';

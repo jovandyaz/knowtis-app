@@ -1,4 +1,5 @@
-import { detectPromptInjection } from '@knowtis/ai-gateway';
+import { detectPromptInjection } from '@jovandyaz/ai-gateway';
+
 import { MEMORY_MAX_CHARS } from '@knowtis/shared-types';
 
 const NOTE_ACTIONS_EN =

@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   MODEL_INDEX_SNAPSHOT,
   TOKENS_PER_MILLION,
   type IndexedModel,
   type IndexProvider,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { describe, expect, it } from 'vitest';
+
 import {
   BYOK_PROVIDERS,
   MODEL_INTENTS,

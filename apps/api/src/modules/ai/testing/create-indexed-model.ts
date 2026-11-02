@@ -1,4 +1,4 @@
-import type { IndexedModel } from '@knowtis/ai-gateway';
+import type { IndexedModel } from '@jovandyaz/ai-gateway';
 
 export function createIndexedModel(
   overrides: Partial<IndexedModel> & { id: string }

@@ -1,13 +1,13 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogle } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
+import { OPENROUTER_PROVIDER, providerOf } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { createGateway, createProviderRegistry, wrapLanguageModel } from 'ai';
 import type { LanguageModel, ProviderRegistryProvider } from 'ai';
 
-import { OPENROUTER_PROVIDER, providerOf } from '@knowtis/ai-gateway';
 import {
   AI_PROVIDERS,
   isByokProvider,

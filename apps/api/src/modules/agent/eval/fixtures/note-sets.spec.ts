@@ -1,6 +1,6 @@
+import { detectPromptInjection } from '@jovandyaz/ai-gateway';
 import { describe, expect, it } from 'vitest';
 
-import { detectPromptInjection } from '@knowtis/ai-gateway';
 import { htmlToMarkdown, markdownToHtml } from '@knowtis/note-markdown';
 
 import {

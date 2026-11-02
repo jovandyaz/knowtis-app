@@ -1,10 +1,9 @@
-import type { Logger } from '@nestjs/common';
-
 import type {
   AiInputDetection,
   AiInputDisposition,
   AiInputSurface,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import type { Logger } from '@nestjs/common';
 
 type InputRole = 'user' | 'assistant' | 'tool';
 

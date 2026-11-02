@@ -1,6 +1,6 @@
+import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@jovandyaz/ai-gateway';
 import { describe, expect, it } from 'vitest';
 
-import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@knowtis/ai-gateway';
 import {
   BYOK_PROVIDERS,
   MODEL_INTENTS,

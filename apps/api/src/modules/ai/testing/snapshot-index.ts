@@ -1,7 +1,7 @@
 import {
   MODEL_INDEX_SNAPSHOT,
   MODEL_INDEX_SNAPSHOT_DATE,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
 
 import { ModelIndexCache } from '../infrastructure/catalog/model-index.cache';
 import { createModelIndexRepositoryStub } from './create-model-index-repository-stub';

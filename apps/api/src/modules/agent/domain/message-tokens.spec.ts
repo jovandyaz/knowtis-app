@@ -1,6 +1,5 @@
+import { estimateTokenCount } from '@jovandyaz/ai-gateway';
 import { describe, expect, it } from 'vitest';
-
-import { estimateTokenCount } from '@knowtis/ai-gateway';
 
 import type { AgentMessagePart } from './agent-message';
 import { estimateMessageTokens } from './message-tokens';

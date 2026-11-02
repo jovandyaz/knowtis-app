@@ -1,7 +1,7 @@
+import { OPENROUTER_PROVIDER } from '@jovandyaz/ai-gateway';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
 import type { ModelIntent } from '@knowtis/shared-types';
 
 import type { AdminAuditService } from '../../../admin/audit/admin-audit.service';

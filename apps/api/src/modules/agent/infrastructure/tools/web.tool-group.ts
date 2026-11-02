@@ -1,8 +1,7 @@
+import { detectPromptInjection } from '@jovandyaz/ai-gateway';
 import { Inject, Injectable } from '@nestjs/common';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
-
-import { detectPromptInjection } from '@knowtis/ai-gateway';
 
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {

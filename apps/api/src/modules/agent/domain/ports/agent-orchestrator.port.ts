@@ -1,4 +1,4 @@
-import type { ModelPricing } from '@knowtis/ai-gateway';
+import type { ModelPricing } from '@jovandyaz/ai-gateway';
 
 import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
 import type { TurnEffort } from '../../../ai/domain/model-catalog/effort-policy';

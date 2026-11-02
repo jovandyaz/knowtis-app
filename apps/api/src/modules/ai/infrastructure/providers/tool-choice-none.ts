@@ -1,4 +1,5 @@
-import { OPENROUTER_PROVIDER, providerOf } from '@knowtis/ai-gateway';
+import { OPENROUTER_PROVIDER, providerOf } from '@jovandyaz/ai-gateway';
+
 import type { AIProvider } from '@knowtis/shared-types';
 
 // Under a none tool choice, @ai-sdk/anthropic sends no tools yet keeps the

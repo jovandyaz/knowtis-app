@@ -1,6 +1,5 @@
+import { MAX_GUARD_INPUT_CHARS } from '@jovandyaz/ai-gateway';
 import type { Assertion } from 'promptfoo';
-
-import { MAX_GUARD_INPUT_CHARS } from '@knowtis/ai-gateway';
 
 import type { AgentMessage } from '../domain/agent-message';
 import { asTranscript, NOTE_READ_TOOL } from './assertions';

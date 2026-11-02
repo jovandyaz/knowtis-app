@@ -1,7 +1,6 @@
+import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@jovandyaz/ai-gateway';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@knowtis/ai-gateway';
 
 import type { WatchFinding } from '../../domain/model-catalog/model-watch';
 import {

@@ -1,11 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
-import type { Result } from 'neverthrow';
-
 import {
   MODEL_CATALOG,
   sanitizeContent,
   type ModelCatalog,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
+import { Inject, Injectable } from '@nestjs/common';
+import type { Result } from 'neverthrow';
+
 import { AI_ACTION } from '@knowtis/shared-types';
 
 import type { AIDomainError } from '../../domain/errors/ai.errors';

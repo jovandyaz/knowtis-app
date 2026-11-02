@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import { rename, writeFile } from 'node:fs/promises';
 
-import { INDEX_PROVIDERS, ModelIndexCatalog } from '@knowtis/ai-gateway';
+import { INDEX_PROVIDERS, ModelIndexCatalog } from '@jovandyaz/ai-gateway';
 
 import { providerBatches } from '../modules/ai/infrastructure/catalog/model-index.writer';
 import { ModelsDevHttpClient } from '../modules/ai/infrastructure/catalog/models-dev.client';

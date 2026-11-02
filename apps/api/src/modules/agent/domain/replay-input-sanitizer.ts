@@ -4,7 +4,7 @@ import {
   MAX_GUARD_SCAN_CHARS,
   type AiInputDetection,
   type AiInputDisposition,
-} from '@knowtis/ai-gateway';
+} from '@jovandyaz/ai-gateway';
 
 import {
   textOfParts,

@@ -1,6 +1,5 @@
+import type { ModelPricing } from '@jovandyaz/ai-gateway';
 import type { LanguageModelUsage } from 'ai';
-
-import type { ModelPricing } from '@knowtis/ai-gateway';
 
 import { TokenUsage } from '../../../ai/domain/value-objects/token-usage.vo';
 import type { AgentTurnUsage } from '../../domain/agent-event';
