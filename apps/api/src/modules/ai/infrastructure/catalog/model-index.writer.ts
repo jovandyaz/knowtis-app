@@ -90,10 +90,10 @@ function modelsDevBatches(modelsDev: ModelsDevCatalog): ProviderBatch[] {
  * models.dev has no entry for keeps the family, canonical, open-weights and
  * status of its `previous` row.
  */
-export function providerBatches(
+function providerBatches(
   openRouter: UpstreamCatalog | null,
   modelsDev: ModelsDevCatalog | null,
-  previous: readonly IndexedModel[] = []
+  previous: readonly IndexedModel[]
 ): ProviderBatch[] {
   return [
     ...(modelsDev === null ? [] : modelsDevBatches(modelsDev)),

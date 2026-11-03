@@ -36,7 +36,6 @@ export default defineConfig([
   globalIgnores([
     'dist',
     '**/routeTree.gen.ts',
-    'packages/llm-router/src/catalog/model-index.snapshot.ts',
     'coverage',
     'tmp',
     '.nx',
@@ -224,25 +223,6 @@ export default defineConfig([
         'error',
         {
           patterns: [{ group: WORKSPACE_PACKAGES, message: ISOLATED_PACKAGE }],
-        },
-      ],
-    },
-  },
-  {
-    basePath: workspaceRoot,
-    files: ['packages/llm-router/src/**/*.ts'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            { group: WORKSPACE_PACKAGES, message: ISOLATED_PACKAGE },
-            {
-              group: ['@nestjs/*', 'ai', '@ai-sdk/*'],
-              message:
-                'llm-router stays free of frameworks and SDKs; callers pass the model call in as a function.',
-            },
-          ],
         },
       ],
     },

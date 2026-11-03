@@ -18,7 +18,6 @@ package-lock.json
 # Auto-generated
 **/routeTree.gen.ts
 *.gen.ts
-packages/llm-router/src/catalog/model-index.snapshot.ts
 .agents/skills
 
 # Design system build

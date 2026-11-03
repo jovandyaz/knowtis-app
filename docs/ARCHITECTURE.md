@@ -103,7 +103,6 @@ knowtis/
 │       └── users/           # Users hooks & schemas
 │
 └── packages/                # Shared packages (framework-light, reusable)
-    ├── llm-router/          # Framework-free LLM router core (chain, catalog, guard, tokens)
     ├── auth/                # Auth core (+ /server): types, value objects, token/crypto
     ├── auth-nestjs/         # NestJS auth adapter (handlers, guards, strategies)
     ├── auth-react/          # React auth integration (store, hooks, provider)
@@ -130,7 +129,7 @@ knowtis/
 | **API Client**    | `libs/api-client`                                                 | HTTP client, WebSocket client, API types                                  |
 | **Authorization** | `libs/authorization`                                              | CASL permission definitions (shared FE/BE)                                |
 | **Data Access**   | `libs/data-access/*`                                              | React Query hooks + Zod schemas per domain (see below)                    |
-| **LLM router**    | `packages/llm-router`                                             | LLM router core: fallback chain, pricing catalog, injection guard, tokens |
+| **LLM router**    | `@jovandyaz/llm-router` (npm)                                     | LLM router core: fallback chain, pricing catalog, injection guard, tokens |
 | **Auth**          | `packages/auth`, `auth-nestjs`, `auth-react`                      | Auth core + NestJS/React adapters (JWT, sessions, anon)                   |
 | **Permissions**   | `packages/permissions`, `permissions-nestjs`, `permissions-react` | CASL core + NestJS/React adapters                                         |
 | **Editor / CRDT** | `packages/editor`, `editor-schema`, `crdt`                        | Collaborative Tiptap + Yjs editor, schema extensions, CRDT helpers        |
@@ -202,7 +201,6 @@ graph TD
     end
 
     subgraph Packages
-        LlmRouter[packages/llm-router]
         Email[packages/email]
         EmailNestjs[packages/email-nestjs]
         Auth[packages/auth]
@@ -226,7 +224,6 @@ graph TD
     DesignSystem --> Shared
     AuthReact --> Auth
 
-    API --> LlmRouter
     API --> Authorization
     API --> EmailNestjs
     API --> AuthNestjs
@@ -235,7 +232,7 @@ graph TD
     AuthNestjs --> Auth
 ```
 
-`apps/mcp` (`scope:api`) has no workspace imports; it talks to the API over HTTP. `packages/llm-router` (`scope:api`) has zero workspace dependencies by design.
+`apps/mcp` (`scope:api`) has no workspace imports; it talks to the API over HTTP.
 
 ---
 

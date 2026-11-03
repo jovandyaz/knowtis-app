@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-01. Retroactive: it records a decision taken in stages, whose main technical step was [#157](https://github.com/jovandyaz/knowtis-app/pull/157).
-- **Scope:** the fallback chain, per-step failover and budgets in `packages/llm-router` and `apps/api/src/modules/{ai,agent}`.
+- **Scope:** the fallback chain, per-step failover and budgets in [`@jovandyaz/llm-router`](https://github.com/jovandyaz/llm-router) and `apps/api/src/modules/{ai,agent}`.
 
 No comparison of alternatives was written down when the decision was made. The options below are assessed with what is known on the date of this record, not what was known then.
 
