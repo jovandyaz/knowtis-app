@@ -880,7 +880,11 @@ describe('CatalogSyncTask', () => {
 
     await task.run();
 
-    expect(repo.createAlert).not.toHaveBeenCalled();
+    expect(repo.createAlert).not.toHaveBeenCalledWith(
+      PLATFORM_SEED_MODELS.balanced,
+      'pin_unavailable',
+      expect.any(String)
+    );
   });
 
   it('re-raises a resolved pin_unavailable on the next sync', async () => {

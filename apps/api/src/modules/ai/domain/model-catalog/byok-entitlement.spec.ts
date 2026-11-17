@@ -1,10 +1,7 @@
-import { MODEL_INDEX_SNAPSHOT } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import type { ByokProvider } from '@knowtis/shared-types';
 
-import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
-import { routeIdOf } from '../../testing/snapshot-route';
 import {
   entitledIdsOf,
   entitlementsFrom,
@@ -12,7 +9,6 @@ import {
   NO_ENTITLEMENTS,
   type StoredListing,
 } from './byok-entitlement';
-import { slugOf } from './catalog-model';
 
 function entitlementsOf(provider: ByokProvider, listed: readonly string[]) {
   return new Map([[provider, entitledIdsOf(listed)]]);
@@ -20,41 +16,29 @@ function entitlementsOf(provider: ByokProvider, listed: readonly string[]) {
 
 describe('isEntitled', () => {
   it('entitles a route its listing names exactly', () => {
-    const id = routeIdOf(
-      'balanced',
-      'anthropic',
-      MODEL_INDEX_SNAPSHOT,
-      SNAPSHOT_DATE
-    );
+    const id = 'anthropic:claude-sonnet-5-5';
 
-    expect(isEntitled(id, entitlementsOf('anthropic', [slugOf(id)]))).toBe(
-      true
-    );
+    expect(
+      isEntitled(id, entitlementsOf('anthropic', ['claude-sonnet-5-5']))
+    ).toBe(true);
   });
 
   it('entitles an undated route whose listing names only its -YYYYMMDD snapshot', () => {
-    const id = routeIdOf(
-      'fast',
-      'anthropic',
-      MODEL_INDEX_SNAPSHOT,
-      SNAPSHOT_DATE
-    );
+    const id = 'anthropic:claude-haiku-4-5';
 
     expect(
-      isEntitled(id, entitlementsOf('anthropic', [`${slugOf(id)}-20251001`]))
+      isEntitled(id, entitlementsOf('anthropic', ['claude-haiku-4-5-20251001']))
     ).toBe(true);
   });
 
   it('entitles an undated route whose listing names only its -YYYY-MM-DD snapshot', () => {
-    const id = routeIdOf(
-      'fast',
-      'anthropic',
-      MODEL_INDEX_SNAPSHOT,
-      SNAPSHOT_DATE
-    );
+    const id = 'anthropic:claude-haiku-4-5';
 
     expect(
-      isEntitled(id, entitlementsOf('anthropic', [`${slugOf(id)}-2025-10-01`]))
+      isEntitled(
+        id,
+        entitlementsOf('anthropic', ['claude-haiku-4-5-2025-10-01'])
+      )
     ).toBe(true);
   });
 
@@ -77,16 +61,14 @@ describe('isEntitled', () => {
   });
 
   it('entitles an OpenRouter route by its author/slug', () => {
-    const id = routeIdOf(
-      'fast',
-      'openrouter',
-      MODEL_INDEX_SNAPSHOT,
-      SNAPSHOT_DATE
-    );
+    const id = 'openrouter:anthropic/claude-haiku-4.5';
 
-    expect(isEntitled(id, entitlementsOf('openrouter', [slugOf(id)]))).toBe(
-      true
-    );
+    expect(
+      isEntitled(
+        id,
+        entitlementsOf('openrouter', ['anthropic/claude-haiku-4.5'])
+      )
+    ).toBe(true);
     expect(isEntitled(id, entitlementsOf('openrouter', ['other/model']))).toBe(
       false
     );
@@ -95,16 +77,11 @@ describe('isEntitled', () => {
   it('entitles every route of a provider without a listing', () => {
     expect(
       isEntitled(
-        routeIdOf('fast', 'openai', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
+        'openai:gpt-6-luna',
         entitlementsOf('anthropic', ['claude-haiku-4-5'])
       )
     ).toBe(true);
-    expect(
-      isEntitled(
-        routeIdOf('fast', 'openai', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
-        NO_ENTITLEMENTS
-      )
-    ).toBe(true);
+    expect(isEntitled('openai:gpt-6-luna', NO_ENTITLEMENTS)).toBe(true);
   });
 
   it('entitles a model of a provider outside BYOK', () => {
@@ -148,12 +125,7 @@ describe('entitlementsFrom', () => {
     );
 
     expect(entitlements.has('anthropic')).toBe(false);
-    expect(
-      isEntitled(
-        routeIdOf('balanced', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
-        entitlements
-      )
-    ).toBe(true);
+    expect(isEntitled('anthropic:claude-sonnet-5-5', entitlements)).toBe(true);
   });
 
   it('drops a listing for a key that no longer decrypts', () => {
@@ -169,11 +141,6 @@ describe('entitlementsFrom', () => {
     );
 
     expect(entitlements.has('anthropic')).toBe(false);
-    expect(
-      isEntitled(
-        routeIdOf('balanced', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
-        entitlements
-      )
-    ).toBe(true);
+    expect(isEntitled('anthropic:claude-sonnet-5-5', entitlements)).toBe(true);
   });
 });

@@ -289,10 +289,6 @@ export const FIXTURE_INDEX: readonly IndexedModel[] = [
       releasedAt: '2026-02-12',
       routes: [{ id: 'openrouter:minimax/minimax-m2.5' }],
     },
-    {
-      releasedAt: '2026-01-23',
-      routes: [{ id: 'openrouter:minimax/minimax-m2-her' }],
-    },
   ]),
   ...familyRows('deepseek', [
     {

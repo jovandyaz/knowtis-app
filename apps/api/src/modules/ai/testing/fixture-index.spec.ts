@@ -1,3 +1,4 @@
+import { INDEX_PROVIDERS } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import { BYOK_PROVIDERS, MODEL_INTENTS } from '@knowtis/shared-types';
@@ -14,6 +15,12 @@ import { FIXTURE_DATE, FIXTURE_INDEX, fixtureRow } from './fixture-index';
 const HARD_CODED_RETIREMENT = '2026-10-20T00:00:00Z';
 
 describe('fixture index', () => {
+  it('lists a row for every index provider, so no spec serves a snapshot floor row', () => {
+    expect(new Set(FIXTURE_INDEX.map((row) => row.provider))).toEqual(
+      new Set(INDEX_PROVIDERS)
+    );
+  });
+
   it('resolves every intent on every BYOK provider and the platform at FIXTURE_DATE', () => {
     for (const intent of MODEL_INTENTS) {
       expect(
@@ -67,6 +74,17 @@ describe('fixture index', () => {
       expect(fixtureRow(variant).canonical).toBe(canonical);
       expect(plainRouteCanonical(base, canonical)).toBe(canonical);
       expect(plainRouteCanonical(variant, canonical)).toBeUndefined();
+    }
+  );
+
+  it.each([
+    ['openrouter:z-ai/glm-5.3', 'zhipuai/glm-5-3'],
+    ['openrouter:z-ai/glm-5.2', 'zhipuai/glm-5-2'],
+  ])(
+    'files %s under the zhipuai canonical upstream gives it, so it is no plain route of it',
+    (id, canonical) => {
+      expect(fixtureRow(id).canonical).toBe(canonical);
+      expect(plainRouteCanonical(id, canonical)).toBeUndefined();
     }
   );
 
