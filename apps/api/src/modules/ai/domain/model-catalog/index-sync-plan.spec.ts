@@ -6,7 +6,7 @@ import {
 } from '@jovandyaz/llm-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';
+import { platformFloorRowsOf } from '../../testing/create-floor-rows';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import { isoDateOf, MS_PER_DAY } from '../value-objects/utc-day';
 import { byokFloorKey } from './floor-models';
@@ -31,6 +31,10 @@ function snapshotRow(id: string): IndexedModel {
   return row;
 }
 
+const PLATFORM_FLOOR_ROWS = platformFloorRowsOf(
+  MODEL_INDEX_SNAPSHOT,
+  SNAPSHOT_DATE
+);
 const [, BALANCED_FLOOR_ROW] = PLATFORM_FLOOR_ROWS;
 const RETIRED_DEFAULT_ID = 'openrouter:deepseek/deepseek-v3.2';
 const OLDER_BALANCED_ID = 'openrouter:deepseek/deepseek-v4-pro';

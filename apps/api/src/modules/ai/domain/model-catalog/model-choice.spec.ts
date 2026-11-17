@@ -12,7 +12,7 @@ import type {
 } from '@knowtis/shared-types';
 
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
-import { snapshotRouteId } from '../../testing/snapshot-route';
+import { routeIdOf } from '../../testing/snapshot-route';
 import { TIER_POLICIES } from '../execution-context/tier-policy';
 import { resolveByokSelectors } from './byok-intent-routes';
 import {
@@ -619,8 +619,18 @@ describe('chooseModel', () => {
   });
 
   describe('a model its held key is not entitled to', () => {
-    const unentitled = snapshotRouteId('powerful', 'anthropic');
-    const keyIntent = snapshotRouteId('balanced', 'anthropic');
+    const unentitled = routeIdOf(
+      'powerful',
+      'anthropic',
+      MODEL_INDEX_SNAPSHOT,
+      SNAPSHOT_DATE
+    );
+    const keyIntent = routeIdOf(
+      'balanced',
+      'anthropic',
+      MODEL_INDEX_SNAPSHOT,
+      SNAPSHOT_DATE
+    );
     const choose = setup('byok', ['anthropic'], undefined, {
       isEntitled: (id) => id !== unentitled,
     });

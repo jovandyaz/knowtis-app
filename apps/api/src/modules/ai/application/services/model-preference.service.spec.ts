@@ -38,7 +38,7 @@ import {
   createSyncedSnapshotIndex,
   SNAPSHOT_DATE,
 } from '../../testing/snapshot-index';
-import { snapshotRouteId } from '../../testing/snapshot-route';
+import { routeIdOf } from '../../testing/snapshot-route';
 import { ModelPreferenceService } from './model-preference.service';
 import { SelectableModelsService } from './selectable-models.service';
 
@@ -774,7 +774,7 @@ describe('ModelPreferenceService', () => {
 
     function anthropicListingWithout(unlisted: string) {
       const listed = MODEL_INTENTS.map((intent) =>
-        snapshotRouteId(intent, 'anthropic')
+        routeIdOf(intent, 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)
       )
         .filter((id) => id !== unlisted)
         .map(slugOf);
@@ -793,7 +793,12 @@ describe('ModelPreferenceService', () => {
         'writing a model preference',
         (svc: ModelPreferenceService) =>
           writeAs(svc, BYOK_ANTHROPIC, {
-            preferredModel: snapshotRouteId('fast', 'anthropic'),
+            preferredModel: routeIdOf(
+              'fast',
+              'anthropic',
+              MODEL_INDEX_SNAPSHOT,
+              SNAPSHOT_DATE
+            ),
           }),
       ],
     ])(
@@ -820,7 +825,12 @@ describe('ModelPreferenceService', () => {
     );
 
     it("lists an own-keys catalog filtered by the caller's entitlements", async () => {
-      const balanced = snapshotRouteId('balanced', 'anthropic');
+      const balanced = routeIdOf(
+        'balanced',
+        'anthropic',
+        MODEL_INDEX_SNAPSHOT,
+        SNAPSHOT_DATE
+      );
       const { svc, byokModels } = makeChooser();
       byokModels.entitlementsFor.mockResolvedValue(
         anthropicListingWithout(balanced)
@@ -833,7 +843,7 @@ describe('ModelPreferenceService', () => {
       ]);
       expect(catalog.models.map((m) => m.id)).toEqual(
         MODEL_INTENTS.map((intent) =>
-          snapshotRouteId(intent, 'anthropic')
+          routeIdOf(intent, 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)
         ).filter((id) => id !== balanced)
       );
       expect(catalog.intents).toContainEqual({
@@ -891,7 +901,12 @@ describe('ModelPreferenceService', () => {
     });
 
     it('refuses a preference for a route the key is not entitled to with model_retired', async () => {
-      const powerful = snapshotRouteId('powerful', 'anthropic');
+      const powerful = routeIdOf(
+        'powerful',
+        'anthropic',
+        MODEL_INDEX_SNAPSHOT,
+        SNAPSHOT_DATE
+      );
       const { svc, repo, byokModels } = makeChooser();
       byokModels.entitlementsFor.mockResolvedValue(
         anthropicListingWithout(powerful)

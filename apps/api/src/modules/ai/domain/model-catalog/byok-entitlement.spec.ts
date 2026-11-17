@@ -1,8 +1,10 @@
+import { MODEL_INDEX_SNAPSHOT } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import type { ByokProvider } from '@knowtis/shared-types';
 
-import { snapshotRouteId } from '../../testing/snapshot-route';
+import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
+import { routeIdOf } from '../../testing/snapshot-route';
 import {
   entitledIdsOf,
   entitlementsFrom,
@@ -18,7 +20,12 @@ function entitlementsOf(provider: ByokProvider, listed: readonly string[]) {
 
 describe('isEntitled', () => {
   it('entitles a route its listing names exactly', () => {
-    const id = snapshotRouteId('balanced', 'anthropic');
+    const id = routeIdOf(
+      'balanced',
+      'anthropic',
+      MODEL_INDEX_SNAPSHOT,
+      SNAPSHOT_DATE
+    );
 
     expect(isEntitled(id, entitlementsOf('anthropic', [slugOf(id)]))).toBe(
       true
@@ -26,7 +33,12 @@ describe('isEntitled', () => {
   });
 
   it('entitles an undated route whose listing names only its -YYYYMMDD snapshot', () => {
-    const id = snapshotRouteId('fast', 'anthropic');
+    const id = routeIdOf(
+      'fast',
+      'anthropic',
+      MODEL_INDEX_SNAPSHOT,
+      SNAPSHOT_DATE
+    );
 
     expect(
       isEntitled(id, entitlementsOf('anthropic', [`${slugOf(id)}-20251001`]))
@@ -34,7 +46,12 @@ describe('isEntitled', () => {
   });
 
   it('entitles an undated route whose listing names only its -YYYY-MM-DD snapshot', () => {
-    const id = snapshotRouteId('fast', 'anthropic');
+    const id = routeIdOf(
+      'fast',
+      'anthropic',
+      MODEL_INDEX_SNAPSHOT,
+      SNAPSHOT_DATE
+    );
 
     expect(
       isEntitled(id, entitlementsOf('anthropic', [`${slugOf(id)}-2025-10-01`]))
@@ -60,7 +77,12 @@ describe('isEntitled', () => {
   });
 
   it('entitles an OpenRouter route by its author/slug', () => {
-    const id = snapshotRouteId('fast', 'openrouter');
+    const id = routeIdOf(
+      'fast',
+      'openrouter',
+      MODEL_INDEX_SNAPSHOT,
+      SNAPSHOT_DATE
+    );
 
     expect(isEntitled(id, entitlementsOf('openrouter', [slugOf(id)]))).toBe(
       true
@@ -73,13 +95,16 @@ describe('isEntitled', () => {
   it('entitles every route of a provider without a listing', () => {
     expect(
       isEntitled(
-        snapshotRouteId('fast', 'openai'),
+        routeIdOf('fast', 'openai', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
         entitlementsOf('anthropic', ['claude-haiku-4-5'])
       )
     ).toBe(true);
-    expect(isEntitled(snapshotRouteId('fast', 'openai'), NO_ENTITLEMENTS)).toBe(
-      true
-    );
+    expect(
+      isEntitled(
+        routeIdOf('fast', 'openai', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
+        NO_ENTITLEMENTS
+      )
+    ).toBe(true);
   });
 
   it('entitles a model of a provider outside BYOK', () => {
@@ -124,7 +149,10 @@ describe('entitlementsFrom', () => {
 
     expect(entitlements.has('anthropic')).toBe(false);
     expect(
-      isEntitled(snapshotRouteId('balanced', 'anthropic'), entitlements)
+      isEntitled(
+        routeIdOf('balanced', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
+        entitlements
+      )
     ).toBe(true);
   });
 
@@ -142,7 +170,10 @@ describe('entitlementsFrom', () => {
 
     expect(entitlements.has('anthropic')).toBe(false);
     expect(
-      isEntitled(snapshotRouteId('balanced', 'anthropic'), entitlements)
+      isEntitled(
+        routeIdOf('balanced', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
+        entitlements
+      )
     ).toBe(true);
   });
 });

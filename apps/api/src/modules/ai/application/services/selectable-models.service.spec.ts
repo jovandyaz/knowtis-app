@@ -44,7 +44,7 @@ import {
   createSnapshotIndex,
   SNAPSHOT_DATE,
 } from '../../testing/snapshot-index';
-import { snapshotRouteId } from '../../testing/snapshot-route';
+import { routeIdOf } from '../../testing/snapshot-route';
 import { SelectableModelsService } from './selectable-models.service';
 
 const SONNET_5 = 'anthropic:claude-sonnet-5';
@@ -342,7 +342,7 @@ describe('SelectableModelsService', () => {
 
     it("builds the key catalog from the caller's entitlements", () => {
       const [fast, balanced, powerful] = MODEL_INTENTS.map((intent) =>
-        snapshotRouteId(intent, 'anthropic')
+        routeIdOf(intent, 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)
       );
       const entitlements = new Map<ByokProvider, ReadonlySet<string>>([
         ['anthropic', entitledIdsOf([fast, powerful].map(slugOf))],

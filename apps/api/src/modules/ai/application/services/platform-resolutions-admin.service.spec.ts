@@ -1,4 +1,7 @@
-import { OPENROUTER_PROVIDER } from '@jovandyaz/llm-router';
+import {
+  MODEL_INDEX_SNAPSHOT,
+  OPENROUTER_PROVIDER,
+} from '@jovandyaz/llm-router';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,7 +11,7 @@ import type { AdminAuditService } from '../../../admin/audit/admin-audit.service
 import { ResolutionRollbackUnavailableError } from '../../domain/errors/resolution-rollback-unavailable.error';
 import { SELECTOR_KEY_BY_INTENT } from '../../domain/model-catalog/platform-resolution';
 import type { CatalogAlertsWriter } from '../../infrastructure/catalog/catalog-alerts.writer';
-import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';
+import { platformFloorRowsOf } from '../../testing/create-floor-rows';
 import { createIndexedModel } from '../../testing/create-indexed-model';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
 import {
@@ -226,7 +229,9 @@ describe('PlatformResolutionsAdminService', () => {
     const { intents } = await service.overview();
 
     expect(intents.map((row) => row.candidateModelId)).toEqual(
-      PLATFORM_FLOOR_ROWS.map((row) => row.id)
+      platformFloorRowsOf(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE).map(
+        (row) => row.id
+      )
     );
   });
 

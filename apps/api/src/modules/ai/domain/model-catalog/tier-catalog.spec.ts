@@ -11,8 +11,7 @@ import {
   createSnapshotIndex,
   SNAPSHOT_DATE,
 } from '../../testing/snapshot-index';
-import { snapshotRouteId } from '../../testing/snapshot-route';
-import { supportedAtSnapshot } from '../../testing/supported-at-snapshot';
+import { routeIdOf } from '../../testing/snapshot-route';
 import { TIER_POLICIES } from '../execution-context/tier-policy';
 import { entitledIdsOf, isEntitled } from './byok-entitlement';
 import {
@@ -73,7 +72,7 @@ function catalogFor(
     storedPrimary: options.storedPrimary ?? null,
     platformIntents: options.platformIntents ?? PLATFORM_INTENTS,
     offered: options.offered ?? OFFERED,
-    isSupported: options.isSupported ?? supportedAtSnapshot,
+    isSupported: options.isSupported ?? ((id) => SNAPSHOT.isSupported(id)),
     isPlatformRoutable:
       options.isPlatformRoutable ?? ((id) => id.startsWith('openrouter:')),
     indexRow: options.indexRow ?? ((id) => SNAPSHOT.get(id)),
@@ -136,7 +135,7 @@ describe('tierCatalog', () => {
     const demoted = 'openrouter:vendor/demoted-model';
     const catalog = catalogFor('free', {
       platformIntents: { ...PLATFORM_INTENTS, fast: demoted },
-      isSupported: (id) => id === demoted || supportedAtSnapshot(id),
+      isSupported: (id) => id === demoted || SNAPSHOT.isSupported(id),
     });
     expect(findInCatalog(catalog, demoted)).toEqual({
       model: {
@@ -210,7 +209,7 @@ describe('tierCatalog', () => {
   it('marks a platform intent unavailable when the catalog stops supporting its model', () => {
     const catalog = catalogFor('free', {
       isSupported: (id) =>
-        supportedAtSnapshot(id) && id !== PLATFORM_INTENTS.fast,
+        SNAPSHOT.isSupported(id) && id !== PLATFORM_INTENTS.fast,
     });
     expect(intentModelOf(catalog, 'fast')).toBeNull();
     expect(ids(catalog)).not.toContain(PLATFORM_INTENTS.fast);
@@ -307,7 +306,7 @@ describe('tierCatalog', () => {
     const catalog = catalogFor('byok', {
       heldProviders: ['anthropic'],
       offered: [offered(haiku, 'fast')],
-      isSupported: (id) => id !== haiku && supportedAtSnapshot(id),
+      isSupported: (id) => id !== haiku && SNAPSHOT.isSupported(id),
     });
     expect(intentModelOf(catalog, 'fast')).toBe(haiku);
     expect(findInCatalog(catalog, haiku)).toEqual({
@@ -413,14 +412,24 @@ describe('tierCatalog', () => {
     expect(catalog.intents).toContainEqual({
       intent: 'balanced',
       available: true,
-      modelId: snapshotRouteId('balanced', 'openai'),
+      modelId: routeIdOf(
+        'balanced',
+        'openai',
+        MODEL_INDEX_SNAPSHOT,
+        SNAPSHOT_DATE
+      ),
       substituted: true,
     });
     expect(ids(catalog).filter((id) => direct.has(id))).toEqual([]);
   });
 
   it('keeps every route of a held provider without a listing', () => {
-    const openaiFast = snapshotRouteId('fast', 'openai');
+    const openaiFast = routeIdOf(
+      'fast',
+      'openai',
+      MODEL_INDEX_SNAPSHOT,
+      SNAPSHOT_DATE
+    );
     const entitlements = new Map<ByokProvider, ReadonlySet<string>>([
       ['openai', entitledIdsOf([slugOf(openaiFast)])],
     ]);
@@ -429,15 +438,17 @@ describe('tierCatalog', () => {
       isEntitled: (id) => isEntitled(id, entitlements),
     });
     expect(ids(catalog)).toEqual([
-      snapshotRouteId('fast', 'anthropic'),
+      routeIdOf('fast', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
       openaiFast,
-      snapshotRouteId('balanced', 'anthropic'),
-      snapshotRouteId('powerful', 'anthropic'),
+      routeIdOf('balanced', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
+      routeIdOf('powerful', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
     ]);
     expect(
       MODEL_INTENTS.map((intent) => intentModelOf(catalog, intent))
     ).toEqual(
-      MODEL_INTENTS.map((intent) => snapshotRouteId(intent, 'anthropic'))
+      MODEL_INTENTS.map((intent) =>
+        routeIdOf(intent, 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)
+      )
     );
   });
 
@@ -472,7 +483,7 @@ describe('tierCatalog', () => {
     });
     expect(ids(catalog).filter((id) => fastRoutes.has(id))).toEqual([]);
     expect(intentModelOf(catalog, 'balanced')).toBe(
-      snapshotRouteId('balanced', 'anthropic')
+      routeIdOf('balanced', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)
     );
   });
 

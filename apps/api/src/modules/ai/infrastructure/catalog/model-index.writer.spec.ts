@@ -34,7 +34,7 @@ import type {
   UpstreamCatalog,
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
-import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';
+import { platformFloorRowsOf } from '../../testing/create-floor-rows';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import type { WebhookAlertService } from '../alerting/webhook-alert.service';
 import { ModelIndexWriter } from './model-index.writer';
@@ -75,6 +75,10 @@ const OPENROUTER_ROUTE_KEYS = MODEL_INTENTS.map((intent) =>
 const QWEN_ID = `openrouter:${QWEN_SLUG}`;
 const PLATFORM_FLOOR_KEYS = MODEL_INTENTS.map(
   (intent) => SELECTOR_KEY_BY_INTENT[intent]
+);
+const PLATFORM_FLOOR_ROWS = platformFloorRowsOf(
+  MODEL_INDEX_SNAPSHOT,
+  SNAPSHOT_DATE
 );
 const PLATFORM_SLUGS = PLATFORM_FLOOR_ROWS.map((row) =>
   row.id.slice(OPENROUTER_ID_PREFIX.length)

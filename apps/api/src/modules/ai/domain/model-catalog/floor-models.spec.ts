@@ -5,7 +5,7 @@ import {
 } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
-import { createFloorRows } from '../../testing/create-floor-rows';
+import { floorRowsOf } from '../../testing/create-floor-rows';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import {
   byokFloorKey,
@@ -38,12 +38,16 @@ const OPENROUTER_KEYS = [
 function catalogOf(
   override?: (row: IndexedModel) => IndexedModel
 ): ModelIndexCatalog {
-  return new ModelIndexCatalog(createFloorRows(override));
+  return new ModelIndexCatalog(
+    floorRowsOf(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE, override)
+  );
 }
 
 function catalogWithout(...ids: string[]): ModelIndexCatalog {
   return new ModelIndexCatalog(
-    createFloorRows().filter((row) => !ids.includes(row.id))
+    floorRowsOf(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE).filter(
+      (row) => !ids.includes(row.id)
+    )
   );
 }
 
@@ -140,7 +144,7 @@ describe('unservedFloorModels', () => {
 
 describe('floorModelsLost', () => {
   it('names the platform intents the current catalog serves and the next one drops or degrades', () => {
-    const next = createFloorRows((row) =>
+    const next = floorRowsOf(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE, (row) =>
       row.id === POWERFUL_RESOLUTION
         ? { ...row, inputModalities: IMAGE_ONLY }
         : row
