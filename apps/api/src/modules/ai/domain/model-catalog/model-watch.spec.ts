@@ -1,16 +1,15 @@
-import {
-  MODEL_INDEX_SNAPSHOT_DATE,
-  type IndexedModel,
-} from '@jovandyaz/llm-router';
+import type { IndexedModel } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import { createIndexedModel } from '../../testing/create-indexed-model';
-import { seededResolution } from '../../testing/platform-resolutions';
 import {
-  createSnapshotIndex,
-  SNAPSHOT_DATE,
-} from '../../testing/snapshot-index';
+  FIXTURE_DATE,
+  FIXTURE_INDEX,
+  fixtureRow,
+} from '../../testing/fixture-index';
+import { seededResolution } from '../../testing/platform-resolutions';
 import { AUTO_MODEL_SETTING } from '../ai-settings';
+import { isoDateOf } from '../value-objects/utc-day';
 import {
   findFamilyDrift,
   findPinUnavailable,
@@ -19,16 +18,8 @@ import {
 } from './model-watch';
 import { PLATFORM_SEED_MODELS, SEED_RESOLUTIONS } from './platform-resolution';
 
-const ROWS = createSnapshotIndex().catalog().all();
+const ROWS = FIXTURE_INDEX;
 const LISTED_IDS: ReadonlySet<string> = new Set(ROWS.map((row) => row.id));
-
-function rowWhere(predicate: (row: IndexedModel) => boolean): IndexedModel {
-  const row = ROWS.find(predicate);
-  if (!row) {
-    throw new Error('the snapshot has no row the watch spec needs');
-  }
-  return row;
-}
 
 const LISTED_PIN = PLATFORM_SEED_MODELS.balanced;
 const LISTED_CHAIN_ID = PLATFORM_SEED_MODELS.fast;
@@ -79,13 +70,9 @@ describe('findPinUnavailable', () => {
 });
 
 describe('findRetirementScheduled', () => {
-  const RETIRING = rowWhere((row) => row.retiresAt !== null);
-  const LASTING = rowWhere(
-    (row) => row.retiresAt === null && row.status === 'active'
-  );
-  const DEPRECATED = rowWhere(
-    (row) => row.retiresAt === null && row.status === 'deprecated'
-  );
+  const RETIRING = fixtureRow('openrouter:google/gemini-2.5-pro');
+  const LASTING = fixtureRow('openrouter:deepseek/deepseek-v4.1-flash');
+  const DEPRECATED = fixtureRow('google:gemini-3.1-flash-lite-preview');
 
   it('flags a watched model with a retirement date', () => {
     expect(findRetirementScheduled([RETIRING.id], ROWS)).toEqual([
@@ -132,11 +119,9 @@ describe('findRetirementScheduled', () => {
 });
 
 describe('findFamilyDrift', () => {
-  const RELEASED_TODAY = MODEL_INDEX_SNAPSHOT_DATE;
+  const RELEASED_TODAY = isoDateOf(FIXTURE_DATE);
   const UNLISTED_FAMILY = 'deepseek-ultra';
-  const DEEPSEEK_ACTIVE = rowWhere(
-    (row) => row.id === PLATFORM_SEED_MODELS.balanced
-  );
+  const DEEPSEEK_ACTIVE = fixtureRow(PLATFORM_SEED_MODELS.balanced);
 
   function newcomer(overrides: Partial<IndexedModel> = {}): IndexedModel {
     return createIndexedModel({
@@ -151,7 +136,7 @@ describe('findFamilyDrift', () => {
     const model = newcomer();
 
     expect(
-      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, SNAPSHOT_DATE)
+      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, FIXTURE_DATE)
     ).toEqual([
       {
         subject: model.id,
@@ -165,7 +150,7 @@ describe('findFamilyDrift', () => {
     const model = newcomer({ family: 'deepseek-flash' });
 
     expect(
-      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, SNAPSHOT_DATE)
+      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, FIXTURE_DATE)
     ).toEqual([]);
   });
 
@@ -173,7 +158,7 @@ describe('findFamilyDrift', () => {
     const model = newcomer({ toolCall: false });
 
     expect(
-      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, SNAPSHOT_DATE)
+      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, FIXTURE_DATE)
     ).toEqual([]);
   });
 
@@ -181,7 +166,7 @@ describe('findFamilyDrift', () => {
     const model = newcomer({ releasedAt: DEEPSEEK_ACTIVE.releasedAt });
 
     expect(
-      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, SNAPSHOT_DATE)
+      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, FIXTURE_DATE)
     ).toEqual([]);
   });
 
@@ -189,7 +174,7 @@ describe('findFamilyDrift', () => {
     const model = newcomer({ releasedAt: null });
 
     expect(
-      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, SNAPSHOT_DATE)
+      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, FIXTURE_DATE)
     ).toEqual([]);
   });
 
@@ -197,7 +182,7 @@ describe('findFamilyDrift', () => {
     const model = newcomer({ family: null });
 
     expect(
-      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, SNAPSHOT_DATE)
+      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, FIXTURE_DATE)
     ).toEqual([]);
   });
 
@@ -207,7 +192,7 @@ describe('findFamilyDrift', () => {
     );
 
     expect(
-      findFamilyDrift([...ROWS, newcomer()], resolutions, SNAPSHOT_DATE)
+      findFamilyDrift([...ROWS, newcomer()], resolutions, FIXTURE_DATE)
     ).toEqual([]);
   });
 
@@ -218,12 +203,12 @@ describe('findFamilyDrift', () => {
     });
 
     expect(
-      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, SNAPSHOT_DATE)
+      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, FIXTURE_DATE)
     ).toEqual([]);
   });
 
-  it('stays quiet over the snapshot, whose older BYOK-author families no selector lists', () => {
-    expect(findFamilyDrift(ROWS, SEED_RESOLUTIONS, SNAPSHOT_DATE)).toEqual([]);
+  it('stays quiet over the fixture index, whose older BYOK-author families no selector lists', () => {
+    expect(findFamilyDrift(ROWS, SEED_RESOLUTIONS, FIXTURE_DATE)).toEqual([]);
   });
 
   it('flags a BYOK-author model newer than every current pick of its selectors', () => {
@@ -235,7 +220,7 @@ describe('findFamilyDrift', () => {
     });
 
     expect(
-      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, SNAPSHOT_DATE)
+      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, FIXTURE_DATE)
     ).toEqual([
       {
         subject: model.id,
@@ -256,7 +241,7 @@ describe('findFamilyDrift', () => {
     ];
 
     expect(
-      findFamilyDrift([...ROWS, newcomer()], resolutions, SNAPSHOT_DATE)
+      findFamilyDrift([...ROWS, newcomer()], resolutions, FIXTURE_DATE)
     ).toEqual([]);
   });
 });
@@ -268,13 +253,13 @@ describe('findStaleSync', () => {
   const WINDOW_HOURS = 48;
 
   function hoursBefore(hours: number): Date {
-    return new Date(SNAPSHOT_DATE.getTime() - hours * MS_PER_HOUR);
+    return new Date(FIXTURE_DATE.getTime() - hours * MS_PER_HOUR);
   }
 
   it('flags a sync older than 48 hours', () => {
     const lastSeenAt = hoursBefore(HOURS_PAST_WINDOW);
 
-    expect(findStaleSync(lastSeenAt, SNAPSHOT_DATE)).toEqual({
+    expect(findStaleSync(lastSeenAt, FIXTURE_DATE)).toEqual({
       subject: 'openrouter',
       kind: 'sync_stale',
       detail: expect.stringContaining(lastSeenAt.toISOString()),
@@ -282,7 +267,7 @@ describe('findStaleSync', () => {
   });
 
   it('flags a missing sync', () => {
-    expect(findStaleSync(null, SNAPSHOT_DATE)).toEqual({
+    expect(findStaleSync(null, FIXTURE_DATE)).toEqual({
       subject: 'openrouter',
       kind: 'sync_stale',
       detail: expect.any(String),
@@ -291,8 +276,8 @@ describe('findStaleSync', () => {
 
   it('stays quiet for a sync within the window', () => {
     expect(
-      findStaleSync(hoursBefore(HOURS_WITHIN_WINDOW), SNAPSHOT_DATE)
+      findStaleSync(hoursBefore(HOURS_WITHIN_WINDOW), FIXTURE_DATE)
     ).toBeNull();
-    expect(findStaleSync(hoursBefore(WINDOW_HOURS), SNAPSHOT_DATE)).toBeNull();
+    expect(findStaleSync(hoursBefore(WINDOW_HOURS), FIXTURE_DATE)).toBeNull();
   });
 });
