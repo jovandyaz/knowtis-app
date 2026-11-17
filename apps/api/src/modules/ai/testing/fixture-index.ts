@@ -127,7 +127,11 @@ export const FIXTURE_INDEX: readonly IndexedModel[] = [
           id: 'openrouter:openai/gpt-5.6-terra',
           name: 'OpenAI: GPT-5.6 Terra',
         },
-        { id: 'openrouter:openai/gpt-5.6-terra-pro' },
+        // Upstream files the Pro SKU under its base model, so it is no plain route of it.
+        {
+          id: 'openrouter:openai/gpt-5.6-terra-pro',
+          canonical: 'openai/gpt-5-6-terra',
+        },
       ],
     },
   ]),
@@ -206,8 +210,12 @@ export const FIXTURE_INDEX: readonly IndexedModel[] = [
       routes: [{ id: 'openrouter:deepseek/deepseek-v4-pro' }],
     },
   ]),
+  // Upstream files Z.ai's served GLM rows under zhipuai, so neither is a plain route of its canonical.
   ...familyRows('glm', [
-    { releasedAt: '2026-08-18', routes: [{ id: 'openrouter:z-ai/glm-5.3' }] },
+    {
+      releasedAt: '2026-08-18',
+      routes: [{ id: 'openrouter:z-ai/glm-5.3', canonical: 'zhipuai/glm-5-3' }],
+    },
     {
       releasedAt: '2026-09-18',
       routes: [{ id: 'openrouter:z-ai/glm-5.3-flashx' }],
@@ -224,6 +232,7 @@ export const FIXTURE_INDEX: readonly IndexedModel[] = [
       routes: [
         {
           id: 'openrouter:z-ai/glm-5.2',
+          canonical: 'zhipuai/glm-5-2',
           name: 'Z.ai: GLM 5.2',
           reasoning: { levels: ['xhigh', 'high'], mandatory: false },
         },

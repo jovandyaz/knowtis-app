@@ -7,6 +7,7 @@ import {
   resolvePlatformIntent,
   RETIREMENT_WINDOW_DAYS,
 } from '../domain/model-catalog/model-selectors';
+import { plainRouteCanonical } from '../domain/model-catalog/plain-route';
 import { MS_PER_DAY } from '../domain/value-objects/utc-day';
 import { FIXTURE_DATE, FIXTURE_INDEX, fixtureRow } from './fixture-index';
 
@@ -32,8 +33,18 @@ describe('fixture index', () => {
     const daysAhead =
       (Date.parse(HARD_CODED_RETIREMENT) - FIXTURE_DATE.getTime()) / MS_PER_DAY;
 
+    expect(fixtureRow('openrouter:google/gemini-2.5-pro').retiresAt).toBe(
+      '2026-10-20'
+    );
     expect(daysAhead).toBeGreaterThan(0);
     expect(daysAhead).toBeLessThanOrEqual(RETIREMENT_WINDOW_DAYS);
+  });
+
+  it('files a pro SKU under its base model, as the index does, so it is no plain route of it', () => {
+    const sku = fixtureRow('openrouter:openai/gpt-5.6-terra-pro');
+
+    expect(sku.canonical).toBe('openai/gpt-5-6-terra');
+    expect(plainRouteCanonical(sku.id, sku.canonical)).toBeUndefined();
   });
 
   it('files the direct and OpenRouter routes of one model under one canonical', () => {
