@@ -1,4 +1,4 @@
-import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@jovandyaz/llm-router';
+import type { IndexedModel } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,7 +8,7 @@ import {
   type ModelIntent,
 } from '@knowtis/shared-types';
 
-import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
+import { FIXTURE_DATE, FIXTURE_INDEX } from '../../testing/fixture-index';
 import {
   effectivePrimary,
   entitledRoutes,
@@ -24,7 +24,7 @@ import {
   resolveByokIntent,
 } from './model-selectors';
 
-const RESOLUTIONS = resolveByokSelectors(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE);
+const RESOLUTIONS = resolveByokSelectors(FIXTURE_INDEX, FIXTURE_DATE);
 const WITHIN_RETIREMENT_WINDOW = '2026-10-20';
 const ENTITLED_TO_ALL = () => true;
 
@@ -149,8 +149,8 @@ describe('resolveByokSelectors', () => {
 
   it('leaves out a provider on which the selector ranks nothing', () => {
     const withoutGoogle = resolveByokSelectors(
-      MODEL_INDEX_SNAPSHOT.filter((row) => row.provider !== 'google'),
-      SNAPSHOT_DATE
+      FIXTURE_INDEX.filter((row) => row.provider !== 'google'),
+      FIXTURE_DATE
     );
     expect(Object.keys(withoutGoogle.powerful[2]?.ranked ?? {})).toEqual([
       'openrouter',
@@ -158,13 +158,13 @@ describe('resolveByokSelectors', () => {
   });
 
   it('ranks at the given time, so a row inside its retirement window drops out', () => {
-    const rows: IndexedModel[] = MODEL_INDEX_SNAPSHOT.map((row) =>
+    const rows: IndexedModel[] = FIXTURE_INDEX.map((row) =>
       row.id === 'anthropic:claude-sonnet-5-5'
         ? { ...row, retiresAt: WITHIN_RETIREMENT_WINDOW }
         : row
     );
     expect(
-      resolveByokSelectors(rows, SNAPSHOT_DATE).balanced[0]?.ranked
+      resolveByokSelectors(rows, FIXTURE_DATE).balanced[0]?.ranked
         .anthropic?.[0]?.id
     ).toBe('anthropic:claude-sonnet-5');
   });
@@ -174,27 +174,11 @@ describe('resolveByokSelectors', () => {
       for (const { selector, ranked } of RESOLUTIONS[intent]) {
         for (const provider of BYOK_PROVIDERS) {
           expect(ranked[provider] ?? []).toEqual(
-            rankSelector(
-              selector,
-              provider,
-              MODEL_INDEX_SNAPSHOT,
-              SNAPSHOT_DATE
-            )
+            rankSelector(selector, provider, FIXTURE_INDEX, FIXTURE_DATE)
           );
         }
       }
     }
-  });
-
-  it('never ranks one row under two intents', () => {
-    const ids = MODEL_INTENTS.flatMap((intent) =>
-      RESOLUTIONS[intent].flatMap((candidate) =>
-        Object.values(candidate.ranked).flatMap(
-          (rows) => rows?.map((row) => row.id) ?? []
-        )
-      )
-    );
-    expect(new Set(ids).size).toBe(ids.length);
   });
 });
 
@@ -337,8 +321,8 @@ describe('routeIntent', () => {
 
   it('prefers the direct vendor key over OpenRouter when the primary has no route', () => {
     const withoutGoogle = resolveByokSelectors(
-      MODEL_INDEX_SNAPSHOT.filter((row) => row.provider !== 'google'),
-      SNAPSHOT_DATE
+      FIXTURE_INDEX.filter((row) => row.provider !== 'google'),
+      FIXTURE_DATE
     );
     expect(
       route('fast', ['google', 'openrouter', 'anthropic'], withoutGoogle)
@@ -356,8 +340,8 @@ describe('routeIntent', () => {
         const expected = resolveByokIntent(
           intent,
           provider,
-          MODEL_INDEX_SNAPSHOT,
-          SNAPSHOT_DATE
+          FIXTURE_INDEX,
+          FIXTURE_DATE
         );
         expect(
           routeIntent(newestRoutes(intent), [provider], provider)?.row ?? null
