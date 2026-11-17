@@ -102,6 +102,20 @@ export const FIXTURE_INDEX: readonly IndexedModel[] = [
         { id: 'openrouter:anthropic/claude-opus-5.5' },
       ],
     },
+    {
+      // Its direct and OpenRouter routes declare opposite mandatory reasoning, as upstream does.
+      releasedAt: '2026-07-24',
+      routes: [
+        {
+          id: 'anthropic:claude-opus-5',
+          reasoning: { levels: FULL_LADDER, mandatory: true },
+        },
+        {
+          id: 'openrouter:anthropic/claude-opus-5',
+          reasoning: { levels: OPENROUTER_FULL_LADDER, mandatory: false },
+        },
+      ],
+    },
   ]),
   ...familyRows('gpt-luna', [
     {
@@ -154,7 +168,10 @@ export const FIXTURE_INDEX: readonly IndexedModel[] = [
     {
       releasedAt: '2026-07-09',
       routes: [
-        { id: 'openai:gpt-5.6-sol' },
+        {
+          id: 'openai:gpt-5.6-sol',
+          reasoning: { levels: ['none', ...FULL_LADDER], mandatory: true },
+        },
         // Upstream files the Pro SKU under its base model, so it is no plain route of it.
         {
           id: 'openrouter:openai/gpt-5.6-sol-pro',

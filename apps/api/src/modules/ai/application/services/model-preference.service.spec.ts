@@ -1,4 +1,3 @@
-import { MODEL_INDEX_SNAPSHOT } from '@jovandyaz/llm-router';
 import {
   BadRequestException,
   ForbiddenException,
@@ -6,21 +5,15 @@ import {
 } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  MODEL_INTENTS,
-  type ByokProvider,
-  type ModelIntent,
-  type UpdateAiPreferencesInput,
+import type {
+  ByokProvider,
+  ModelIntent,
+  UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
 
 import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import { entitledIdsOf } from '../../domain/model-catalog/byok-entitlement';
-import {
-  entitledRoutes,
-  reachableRoutes,
-  resolveByokSelectors,
-} from '../../domain/model-catalog/byok-intent-routes';
 import {
   slugOf,
   type CatalogModel,
@@ -32,27 +25,37 @@ import { createByokModelsStub } from '../../testing/create-byok-models-stub';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createExecutionContext } from '../../testing/create-execution-context';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
-import { createResolutionsStub } from '../../testing/platform-resolutions';
 import {
-  createSnapshotIndex,
-  createSyncedSnapshotIndex,
-  SNAPSHOT_DATE,
-} from '../../testing/snapshot-index';
-import { routeIdOf } from '../../testing/snapshot-route';
+  FIXTURE_CATALOG,
+  FIXTURE_DATE,
+  FIXTURE_INDEX,
+} from '../../testing/fixture-index';
+import { createResolutionsStub } from '../../testing/platform-resolutions';
 import { ModelPreferenceService } from './model-preference.service';
 import { SelectableModelsService } from './selectable-models.service';
 
 const RETIRED_MODEL = 'anthropic:claude-retired';
 const SUPERSEDED_SONNET = 'anthropic:claude-sonnet-5';
+const DIRECT_HAIKU = 'anthropic:claude-haiku-4-5';
 const DIRECT_SONNET = 'anthropic:claude-sonnet-5-5';
 const GLM = 'openrouter:z-ai/glm-5.2';
 const ROUTED_SONNET = 'openrouter:anthropic/claude-sonnet-5.5';
 const DIRECT_OPUS = 'anthropic:claude-opus-5-5';
+const ROUTED_OPUS = 'openrouter:anthropic/claude-opus-5.5';
 const PLATFORM_INTENTS: Readonly<Record<ModelIntent, string>> = {
   fast: 'openrouter:minimax/minimax-m2.5',
   balanced: 'openrouter:deepseek/deepseek-v3.2',
   powerful: 'openrouter:moonshotai/kimi-k2.5',
 };
+
+/** The fixture catalog behind the cache port; `servesFresh` is what `servesFreshIndex` answers, false as for a cache still on its snapshot floor. */
+function fixtureIndex(servesFresh = false): ModelIndexCache {
+  const index: Pick<ModelIndexCache, 'catalog' | 'servesFreshIndex'> = {
+    catalog: () => FIXTURE_CATALOG,
+    servesFreshIndex: () => servesFresh,
+  };
+  return index as ModelIndexCache;
+}
 
 function makeChooser(
   settings: {
@@ -61,7 +64,7 @@ function makeChooser(
     primaryProvider?: ByokProvider | null;
   } = {},
   promoted: readonly CatalogModel[] = [],
-  index = createSnapshotIndex(),
+  index = fixtureIndex(),
   promotedFresh = true
 ) {
   const promotedCache = {
@@ -148,6 +151,15 @@ function writeAs(
 }
 
 describe('ModelPreferenceService', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(FIXTURE_DATE);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   describe('listModels', () => {
     it('answers the tier envelope for an anonymous caller: one model, one intent', async () => {
       const catalog = await makeChooser().svc.listModels(
@@ -204,7 +216,7 @@ describe('ModelPreferenceService', () => {
         {
           intent: 'fast',
           available: true,
-          modelId: 'anthropic:claude-haiku-4-5',
+          modelId: DIRECT_HAIKU,
           substituted: false,
         },
         {
@@ -763,19 +775,8 @@ describe('ModelPreferenceService', () => {
       byokProviders: ['anthropic', 'openrouter'],
     });
 
-    beforeEach(() => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(SNAPSHOT_DATE);
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
     function anthropicListingWithout(unlisted: string) {
-      const listed = MODEL_INTENTS.map((intent) =>
-        routeIdOf(intent, 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)
-      )
+      const listed = [DIRECT_HAIKU, DIRECT_SONNET, DIRECT_OPUS]
         .filter((id) => id !== unlisted)
         .map(slugOf);
       return new Map<ByokProvider, ReadonlySet<string>>([
@@ -793,12 +794,7 @@ describe('ModelPreferenceService', () => {
         'writing a model preference',
         (svc: ModelPreferenceService) =>
           writeAs(svc, BYOK_ANTHROPIC, {
-            preferredModel: routeIdOf(
-              'fast',
-              'anthropic',
-              MODEL_INDEX_SNAPSHOT,
-              SNAPSHOT_DATE
-            ),
+            preferredModel: DIRECT_HAIKU,
           }),
       ],
     ])(
@@ -825,15 +821,9 @@ describe('ModelPreferenceService', () => {
     );
 
     it("lists an own-keys catalog filtered by the caller's entitlements", async () => {
-      const balanced = routeIdOf(
-        'balanced',
-        'anthropic',
-        MODEL_INDEX_SNAPSHOT,
-        SNAPSHOT_DATE
-      );
       const { svc, byokModels } = makeChooser();
       byokModels.entitlementsFor.mockResolvedValue(
-        anthropicListingWithout(balanced)
+        anthropicListingWithout(DIRECT_SONNET)
       );
 
       const catalog = await svc.listModels(BYOK_ANTHROPIC);
@@ -841,11 +831,10 @@ describe('ModelPreferenceService', () => {
       expect(byokModels.entitlementsFor.mock.calls).toEqual([
         [BYOK_ANTHROPIC.subject.userId],
       ]);
-      expect(catalog.models.map((m) => m.id)).toEqual(
-        MODEL_INTENTS.map((intent) =>
-          routeIdOf(intent, 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)
-        ).filter((id) => id !== balanced)
-      );
+      expect(catalog.models.map((m) => m.id)).toEqual([
+        DIRECT_HAIKU,
+        DIRECT_OPUS,
+      ]);
       expect(catalog.intents).toContainEqual({
         intent: 'balanced',
         available: false,
@@ -878,42 +867,28 @@ describe('ModelPreferenceService', () => {
     );
 
     it('chooses a turn model among entitled routes only', async () => {
-      const [first, next] = reachableRoutes(
-        entitledRoutes(
-          resolveByokSelectors(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE).powerful,
-          () => true
-        ),
-        ['anthropic', 'openrouter'],
-        'anthropic'
-      );
       const { svc, byokModels } = makeChooser({ preferredIntent: 'powerful' });
       byokModels.entitlementsFor.mockResolvedValue(
-        anthropicListingWithout(first.id)
+        anthropicListingWithout(DIRECT_OPUS)
       );
 
       await expect(
         svc.chooseTurnModel(BYOK_ANTHROPIC_OPENROUTER, {})
       ).resolves.toEqual({
         kind: 'resolved',
-        model: next.id,
-        resolution: { requested: null, resolved: next.id },
+        model: ROUTED_OPUS,
+        resolution: { requested: null, resolved: ROUTED_OPUS },
       });
     });
 
     it('refuses a preference for a route the key is not entitled to with model_retired', async () => {
-      const powerful = routeIdOf(
-        'powerful',
-        'anthropic',
-        MODEL_INDEX_SNAPSHOT,
-        SNAPSHOT_DATE
-      );
       const { svc, repo, byokModels } = makeChooser();
       byokModels.entitlementsFor.mockResolvedValue(
-        anthropicListingWithout(powerful)
+        anthropicListingWithout(DIRECT_OPUS)
       );
 
       const error = await writeAs(svc, BYOK_ANTHROPIC, {
-        preferredModel: powerful,
+        preferredModel: DIRECT_OPUS,
       }).catch((e: unknown) => e);
 
       expect(error).toBeInstanceOf(ModelUnavailableException);
@@ -1086,20 +1061,20 @@ describe('ModelPreferenceService', () => {
       } as const;
       const USER_ID = BYOK_ANTHROPIC.subject.userId;
 
-      async function retiringChooser(
+      function retiringChooser(
         preferredIntent: ModelIntent | null = null,
         promotedFresh = true
       ) {
         return makeChooser(
           { preferredModel: SUPERSEDED_SONNET, preferredIntent },
           [],
-          await createSyncedSnapshotIndex(),
+          fixtureIndex(true),
           promotedFresh
         );
       }
 
       it('names it for the turn to forget, without clearing it before the turn delivers the notice', async () => {
-        const { svc, repo } = await retiringChooser();
+        const { svc, repo } = retiringChooser();
 
         await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual({
           ...RETIRED_PICK_FALLBACK,
@@ -1109,7 +1084,7 @@ describe('ModelPreferenceService', () => {
       });
 
       it('is reported once: forgetting it keeps the stored intent, so the next turn reports nothing', async () => {
-        const { svc, repo } = await retiringChooser('balanced');
+        const { svc, repo } = retiringChooser('balanced');
 
         await svc.forgetRetiredPick(USER_ID, SUPERSEDED_SONNET);
 
@@ -1140,7 +1115,7 @@ describe('ModelPreferenceService', () => {
       });
 
       it('names nothing while the latest promoted models refresh failed, since a promoted pick would read as retired', async () => {
-        const { svc, repo, promotedCache } = await retiringChooser(null, false);
+        const { svc, repo, promotedCache } = retiringChooser(null, false);
 
         await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual(
           RETIRED_PICK_FALLBACK
@@ -1161,7 +1136,7 @@ describe('ModelPreferenceService', () => {
             if (failing) {
               throw new Error('database unreachable');
             }
-            return [...MODEL_INDEX_SNAPSHOT];
+            return [...FIXTURE_INDEX];
           })
         );
         await index.refresh();
@@ -1179,7 +1154,7 @@ describe('ModelPreferenceService', () => {
       });
 
       it('names nothing for a pinned prior model reporting the same retirement, so the turn that resolves the pick still reports it', async () => {
-        const { svc } = await retiringChooser();
+        const { svc } = retiringChooser();
 
         await expect(
           svc.chooseTurnModel(BYOK_ANTHROPIC, { pinned: SUPERSEDED_SONNET })
@@ -1191,7 +1166,7 @@ describe('ModelPreferenceService', () => {
       });
 
       it('names nothing when the turn names the retired model explicitly', async () => {
-        const { svc } = await retiringChooser();
+        const { svc } = retiringChooser();
 
         await expect(
           svc.chooseTurnModel(BYOK_ANTHROPIC, { explicit: SUPERSEDED_SONNET })
@@ -1203,7 +1178,7 @@ describe('ModelPreferenceService', () => {
       });
 
       it('logs a failed clear and never rejects', async () => {
-        const { svc, repo } = await retiringChooser();
+        const { svc, repo } = retiringChooser();
         repo.clearPreferredModel.mockRejectedValueOnce(
           new Error('settings store down')
         );
@@ -1228,7 +1203,7 @@ describe('ModelPreferenceService', () => {
       const { svc } = makeChooser(
         { preferredModel: DIRECT_OPUS },
         [],
-        await createSyncedSnapshotIndex()
+        fixtureIndex(true)
       );
 
       await expect(svc.chooseTurnModel(FREE_CALLER, {})).resolves.toEqual({
