@@ -143,6 +143,25 @@ export const FIXTURE_INDEX: readonly IndexedModel[] = [
         { id: 'openrouter:openai/gpt-6.1-sol' },
       ],
     },
+    {
+      // Older than gpt-6.1-sol, so a route of it is offered or pinned but no intent resolves to it.
+      releasedAt: '2026-09-22',
+      routes: [
+        { id: 'openai:gpt-6-sol' },
+        { id: 'openrouter:openai/gpt-6-sol' },
+      ],
+    },
+    {
+      releasedAt: '2026-07-09',
+      routes: [
+        { id: 'openai:gpt-5.6-sol' },
+        // Upstream files the Pro SKU under its base model, so it is no plain route of it.
+        {
+          id: 'openrouter:openai/gpt-5.6-sol-pro',
+          canonical: 'openai/gpt-5-6-sol',
+        },
+      ],
+    },
   ]),
   ...familyRows('gemini-flash-lite', [
     {
@@ -164,6 +183,14 @@ export const FIXTURE_INDEX: readonly IndexedModel[] = [
       routes: [
         { id: 'google:gemini-3.8-flash' },
         { id: 'openrouter:google/gemini-3.8-flash' },
+      ],
+    },
+    {
+      releasedAt: '2026-05-19',
+      routes: [
+        { id: 'google:gemini-3.5-flash' },
+        // A batch variant is filed under its base model but carries no family, so it ranks nowhere.
+        { id: 'openrouter:google/gemini-3.5-flash:batch', family: null },
       ],
     },
   ]),

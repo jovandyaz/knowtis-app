@@ -1,8 +1,4 @@
-import {
-  MODEL_INDEX_SNAPSHOT,
-  ModelIndexCatalog,
-  type IndexedModel,
-} from '@jovandyaz/llm-router';
+import type { IndexedModel } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import type {
@@ -11,8 +7,11 @@ import type {
   ModelIntent,
 } from '@knowtis/shared-types';
 
-import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
-import { routeIdOf } from '../../testing/snapshot-route';
+import {
+  FIXTURE_CATALOG,
+  FIXTURE_DATE,
+  FIXTURE_INDEX,
+} from '../../testing/fixture-index';
 import { TIER_POLICIES } from '../execution-context/tier-policy';
 import { resolveByokSelectors } from './byok-intent-routes';
 import {
@@ -33,7 +32,6 @@ const PLATFORM_INTENTS: Record<ModelIntent, string> = {
 const PLATFORM_INTENT_IDS: readonly string[] = Object.values(PLATFORM_INTENTS);
 const OPEN_MODEL = 'openrouter:z-ai/glm-5.2';
 const OPEN_TIER_IDS: readonly string[] = [...PLATFORM_INTENT_IDS, OPEN_MODEL];
-const INDEX = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
 const UNLISTED = 'anthropic:claude-unlisted-1';
 const UNLISTED_ROUTE = 'openrouter:acme/unlisted-model';
 const RETIRED = 'anthropic:claude-sonnet-3';
@@ -58,7 +56,7 @@ const OFFERED = [
 ].map(offered);
 
 function unpriced(modelId: string): readonly IndexedModel[] {
-  return MODEL_INDEX_SNAPSHOT.map((row) =>
+  return FIXTURE_INDEX.map((row) =>
     row.id === modelId
       ? { ...row, inputCostPerToken: null, outputCostPerToken: null }
       : row
@@ -81,7 +79,8 @@ function setup(
   const facts: ModelFacts = {
     heldProviders: new Set(held),
     isSupported,
-    canonicalOf: (id) => plainRouteCanonical(id, INDEX.get(id)?.canonical),
+    canonicalOf: (id) =>
+      plainRouteCanonical(id, FIXTURE_CATALOG.get(id)?.canonical),
     isPlatformBilled: (id) =>
       platformIntentIds.includes(id) ||
       (OPEN_TIER_IDS.includes(id) && platformRoutes(id)),
@@ -96,10 +95,7 @@ function setup(
     isSupported,
     isPlatformRoutable: platformRoutes,
     indexRow: () => undefined,
-    byok: resolveByokSelectors(
-      options.rows ?? MODEL_INDEX_SNAPSHOT,
-      SNAPSHOT_DATE
-    ),
+    byok: resolveByokSelectors(options.rows ?? FIXTURE_INDEX, FIXTURE_DATE),
     isEntitled: options.isEntitled ?? (() => true),
   });
   return (request: Partial<ModelRequest>) =>
@@ -190,9 +186,7 @@ describe('chooseModel', () => {
       const HAIKU = 'anthropic:claude-haiku-4-5';
       expect(
         setup('byok', ['anthropic'], undefined, {
-          rows: MODEL_INDEX_SNAPSHOT.filter(
-            (row) => row.family !== 'claude-sonnet'
-          ),
+          rows: FIXTURE_INDEX.filter((row) => row.family !== 'claude-sonnet'),
         })({})
       ).toEqual({
         kind: 'resolved',
@@ -619,18 +613,8 @@ describe('chooseModel', () => {
   });
 
   describe('a model its held key is not entitled to', () => {
-    const unentitled = routeIdOf(
-      'powerful',
-      'anthropic',
-      MODEL_INDEX_SNAPSHOT,
-      SNAPSHOT_DATE
-    );
-    const keyIntent = routeIdOf(
-      'balanced',
-      'anthropic',
-      MODEL_INDEX_SNAPSHOT,
-      SNAPSHOT_DATE
-    );
+    const unentitled = DIRECT_OPUS;
+    const keyIntent = DIRECT_SONNET;
     const choose = setup('byok', ['anthropic'], undefined, {
       isEntitled: (id) => id !== unentitled,
     });
@@ -684,13 +668,10 @@ describe('chooseModel', () => {
     });
 
     describe('when no direct row of the winning selector is entitled', () => {
-      const [sonnet] = resolveByokSelectors(
-        MODEL_INDEX_SNAPSHOT,
-        SNAPSHOT_DATE
-      ).balanced;
-      const direct = sonnet?.ranked.anthropic ?? [];
-      const [routed] = sonnet?.ranked.openrouter ?? [];
-      const unlisted = new Set(direct.map((row) => row.id));
+      const unlisted: ReadonlySet<string> = new Set([
+        DIRECT_SONNET,
+        SUPERSEDED,
+      ]);
       const held: readonly ByokProvider[] = ['anthropic', 'openrouter'];
       const isEntitled = (id: string) => !unlisted.has(id);
 
@@ -705,22 +686,21 @@ describe('chooseModel', () => {
           isSupported: (id) => id !== RETIRED,
           isPlatformRoutable: platformRoutes,
           indexRow: () => undefined,
-          byok: resolveByokSelectors(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
+          byok: resolveByokSelectors(FIXTURE_INDEX, FIXTURE_DATE),
           isEntitled,
         });
 
-        expect(direct.length).toBeGreaterThan(1);
         expect(catalog.intents).toContainEqual({
           intent: 'balanced',
           available: true,
-          modelId: routed?.id,
+          modelId: ROUTED_SONNET,
           substituted: true,
         });
       });
 
       it('serves a stored pick of the newest direct row on its OpenRouter route, with no fallback', () => {
         const request: ModelRequest = {
-          preferredModel: direct[0]?.id ?? null,
+          preferredModel: DIRECT_SONNET,
           preferredIntent: null,
         };
 
@@ -728,8 +708,8 @@ describe('chooseModel', () => {
 
         expect(choice).toEqual({
           kind: 'resolved',
-          model: routed?.id,
-          resolution: { requested: direct[0]?.id, resolved: routed?.id },
+          model: ROUTED_SONNET,
+          resolution: { requested: DIRECT_SONNET, resolved: ROUTED_SONNET },
         });
         expect(retiredStoredPick(request, choice)).toBeNull();
       });
@@ -739,7 +719,7 @@ describe('chooseModel', () => {
   it('refuses with no_route when a byok caller has no servable intent', () => {
     expect(
       setup('byok', ['google'], undefined, {
-        rows: MODEL_INDEX_SNAPSHOT.filter((row) => row.provider !== 'google'),
+        rows: FIXTURE_INDEX.filter((row) => row.provider !== 'google'),
       })({})
     ).toEqual({
       kind: 'unavailable',

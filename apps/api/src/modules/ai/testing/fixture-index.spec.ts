@@ -47,6 +47,29 @@ describe('fixture index', () => {
     expect(plainRouteCanonical(sku.id, sku.canonical)).toBeUndefined();
   });
 
+  it.each([
+    [
+      'a pro SKU',
+      'openai:gpt-5.6-sol',
+      'openrouter:openai/gpt-5.6-sol-pro',
+      'openai/gpt-5-6-sol',
+    ],
+    [
+      'a batch variant',
+      'google:gemini-3.5-flash',
+      'openrouter:google/gemini-3.5-flash:batch',
+      'google/gemini-3-5-flash',
+    ],
+  ])(
+    'files %s under its base model, so only the base is a plain route of it',
+    (_, base, variant, canonical) => {
+      expect(fixtureRow(base).canonical).toBe(canonical);
+      expect(fixtureRow(variant).canonical).toBe(canonical);
+      expect(plainRouteCanonical(base, canonical)).toBe(canonical);
+      expect(plainRouteCanonical(variant, canonical)).toBeUndefined();
+    }
+  );
+
   it('files the direct and OpenRouter routes of one model under one canonical', () => {
     expect(fixtureRow('anthropic:claude-haiku-4-5').canonical).toBe(
       'anthropic/claude-haiku-4-5'

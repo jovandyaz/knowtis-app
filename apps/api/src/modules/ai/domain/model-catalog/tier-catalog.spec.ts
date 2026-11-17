@@ -1,4 +1,4 @@
-import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@jovandyaz/llm-router';
+import type { IndexedModel } from '@jovandyaz/llm-router';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,10 +8,10 @@ import {
 } from '@knowtis/shared-types';
 
 import {
-  createSnapshotIndex,
-  SNAPSHOT_DATE,
-} from '../../testing/snapshot-index';
-import { routeIdOf } from '../../testing/snapshot-route';
+  FIXTURE_CATALOG,
+  FIXTURE_DATE,
+  FIXTURE_INDEX,
+} from '../../testing/fixture-index';
 import { TIER_POLICIES } from '../execution-context/tier-policy';
 import { entitledIdsOf, isEntitled } from './byok-entitlement';
 import {
@@ -34,8 +34,11 @@ const PLATFORM_INTENTS: Record<ModelIntent, string> = {
   powerful: 'openrouter:moonshotai/kimi-k2.5',
 };
 const PLATFORM_INTENT_IDS: readonly string[] = Object.values(PLATFORM_INTENTS);
-const SNAPSHOT = createSnapshotIndex().catalog();
-const BYOK = resolveByokSelectors(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE);
+const BYOK = resolveByokSelectors(FIXTURE_INDEX, FIXTURE_DATE);
+const DIRECT_SONNETS: ReadonlySet<string> = new Set([
+  'anthropic:claude-sonnet-5-5',
+  'anthropic:claude-sonnet-5',
+]);
 
 const offered = (id: string, tier: OfferedModel['tier']): OfferedModel => ({
   id,
@@ -72,10 +75,11 @@ function catalogFor(
     storedPrimary: options.storedPrimary ?? null,
     platformIntents: options.platformIntents ?? PLATFORM_INTENTS,
     offered: options.offered ?? OFFERED,
-    isSupported: options.isSupported ?? ((id) => SNAPSHOT.isSupported(id)),
+    isSupported:
+      options.isSupported ?? ((id) => FIXTURE_CATALOG.isSupported(id)),
     isPlatformRoutable:
       options.isPlatformRoutable ?? ((id) => id.startsWith('openrouter:')),
-    indexRow: options.indexRow ?? ((id) => SNAPSHOT.get(id)),
+    indexRow: options.indexRow ?? ((id) => FIXTURE_CATALOG.get(id)),
     byok: options.byok ?? BYOK,
     isEntitled: options.isEntitled ?? (() => true),
   });
@@ -85,26 +89,13 @@ function resolvedWith(
   replace: (row: IndexedModel) => IndexedModel | null
 ): ByokResolutions {
   return resolveByokSelectors(
-    MODEL_INDEX_SNAPSHOT.flatMap((row) => replace(row) ?? []),
-    SNAPSHOT_DATE
+    FIXTURE_INDEX.flatMap((row) => replace(row) ?? []),
+    FIXTURE_DATE
   );
 }
 
 const ids = (catalog: ReturnType<typeof catalogFor>) =>
   catalog.models.map((scoped) => scoped.model.id);
-
-function rankedOn(
-  intent: ModelIntent,
-  provider: ByokProvider
-): readonly IndexedModel[] {
-  const rows = BYOK[intent][0]?.ranked[provider];
-  if (rows === undefined) {
-    throw new Error(
-      `the first ${intent} candidate ranks nothing on ${provider}`
-    );
-  }
-  return rows;
-}
 
 describe('tierCatalog', () => {
   it('gives an anonymous caller only the default intent model', () => {
@@ -135,7 +126,7 @@ describe('tierCatalog', () => {
     const demoted = 'openrouter:vendor/demoted-model';
     const catalog = catalogFor('free', {
       platformIntents: { ...PLATFORM_INTENTS, fast: demoted },
-      isSupported: (id) => id === demoted || SNAPSHOT.isSupported(id),
+      isSupported: (id) => id === demoted || FIXTURE_CATALOG.isSupported(id),
     });
     expect(findInCatalog(catalog, demoted)).toEqual({
       model: {
@@ -209,7 +200,7 @@ describe('tierCatalog', () => {
   it('marks a platform intent unavailable when the catalog stops supporting its model', () => {
     const catalog = catalogFor('free', {
       isSupported: (id) =>
-        SNAPSHOT.isSupported(id) && id !== PLATFORM_INTENTS.fast,
+        FIXTURE_CATALOG.isSupported(id) && id !== PLATFORM_INTENTS.fast,
     });
     expect(intentModelOf(catalog, 'fast')).toBeNull();
     expect(ids(catalog)).not.toContain(PLATFORM_INTENTS.fast);
@@ -306,7 +297,7 @@ describe('tierCatalog', () => {
     const catalog = catalogFor('byok', {
       heldProviders: ['anthropic'],
       offered: [offered(haiku, 'fast')],
-      isSupported: (id) => id !== haiku && SNAPSHOT.isSupported(id),
+      isSupported: (id) => id !== haiku && FIXTURE_CATALOG.isSupported(id),
     });
     expect(intentModelOf(catalog, 'fast')).toBe(haiku);
     expect(findInCatalog(catalog, haiku)).toEqual({
@@ -365,71 +356,53 @@ describe('tierCatalog', () => {
   });
 
   it('an un-entitled newest direct route falls back to the key’s older entitled row, not to another provider', () => {
-    const [newest, older] = rankedOn('balanced', 'anthropic');
-    const [routed] = rankedOn('balanced', 'openrouter');
+    const newest = 'anthropic:claude-sonnet-5-5';
     const catalog = catalogFor('byok', {
       heldProviders: ['anthropic', 'openrouter'],
       offered: [],
-      isEntitled: (id) => id !== newest?.id,
+      isEntitled: (id) => id !== newest,
     });
     expect(catalog.intents).toContainEqual({
       intent: 'balanced',
       available: true,
-      modelId: older?.id,
+      modelId: 'anthropic:claude-sonnet-5',
       substituted: false,
     });
-    expect(ids(catalog)).toContain(routed?.id);
-    expect(ids(catalog)).not.toContain(newest?.id);
+    expect(ids(catalog)).toContain('openrouter:anthropic/claude-sonnet-5.5');
+    expect(ids(catalog)).not.toContain(newest);
   });
 
   it('falls through to another provider of the candidate only when no direct row is entitled', () => {
-    const direct = new Set(
-      rankedOn('balanced', 'anthropic').map((row) => row.id)
-    );
-    const [routed] = rankedOn('balanced', 'openrouter');
     const catalog = catalogFor('byok', {
       heldProviders: ['anthropic', 'openrouter'],
       offered: [],
-      isEntitled: (id) => !direct.has(id),
+      isEntitled: (id) => !DIRECT_SONNETS.has(id),
     });
     expect(catalog.intents).toContainEqual({
       intent: 'balanced',
       available: true,
-      modelId: routed?.id,
+      modelId: 'openrouter:anthropic/claude-sonnet-5.5',
       substituted: true,
     });
-    expect(ids(catalog).filter((id) => direct.has(id))).toEqual([]);
+    expect(ids(catalog).filter((id) => DIRECT_SONNETS.has(id))).toEqual([]);
   });
 
   it('routes an intent to the next candidate only when no row of the first is entitled', () => {
-    const direct = new Set(
-      rankedOn('balanced', 'anthropic').map((row) => row.id)
-    );
     const catalog = catalogFor('byok', {
       heldProviders: ['anthropic', 'openai'],
-      isEntitled: (id) => !direct.has(id),
+      isEntitled: (id) => !DIRECT_SONNETS.has(id),
     });
     expect(catalog.intents).toContainEqual({
       intent: 'balanced',
       available: true,
-      modelId: routeIdOf(
-        'balanced',
-        'openai',
-        MODEL_INDEX_SNAPSHOT,
-        SNAPSHOT_DATE
-      ),
+      modelId: 'openai:gpt-5.6-terra',
       substituted: true,
     });
-    expect(ids(catalog).filter((id) => direct.has(id))).toEqual([]);
+    expect(ids(catalog).filter((id) => DIRECT_SONNETS.has(id))).toEqual([]);
   });
 
   it('keeps every route of a held provider without a listing', () => {
-    const openaiFast = routeIdOf(
-      'fast',
-      'openai',
-      MODEL_INDEX_SNAPSHOT,
-      SNAPSHOT_DATE
-    );
+    const openaiFast = 'openai:gpt-6-luna';
     const entitlements = new Map<ByokProvider, ReadonlySet<string>>([
       ['openai', entitledIdsOf([slugOf(openaiFast)])],
     ]);
@@ -438,18 +411,18 @@ describe('tierCatalog', () => {
       isEntitled: (id) => isEntitled(id, entitlements),
     });
     expect(ids(catalog)).toEqual([
-      routeIdOf('fast', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
+      'anthropic:claude-haiku-4-5',
       openaiFast,
-      routeIdOf('balanced', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
-      routeIdOf('powerful', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
+      'anthropic:claude-sonnet-5-5',
+      'anthropic:claude-opus-5-5',
     ]);
     expect(
       MODEL_INTENTS.map((intent) => intentModelOf(catalog, intent))
-    ).toEqual(
-      MODEL_INTENTS.map((intent) =>
-        routeIdOf(intent, 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)
-      )
-    );
+    ).toEqual([
+      'anthropic:claude-haiku-4-5',
+      'anthropic:claude-sonnet-5-5',
+      'anthropic:claude-opus-5-5',
+    ]);
   });
 
   it('drops a promoted model its key is not entitled to', () => {
@@ -483,7 +456,7 @@ describe('tierCatalog', () => {
     });
     expect(ids(catalog).filter((id) => fastRoutes.has(id))).toEqual([]);
     expect(intentModelOf(catalog, 'balanced')).toBe(
-      routeIdOf('balanced', 'anthropic', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)
+      'anthropic:claude-sonnet-5-5'
     );
   });
 
