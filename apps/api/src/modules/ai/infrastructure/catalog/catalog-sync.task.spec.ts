@@ -1,6 +1,4 @@
 import {
-  MODEL_INDEX_SNAPSHOT,
-  MODEL_INDEX_SNAPSHOT_DATE,
   MODELS_DEV_PROVIDERS,
   OPENROUTER_PROVIDER,
   type IndexedModel,
@@ -23,13 +21,18 @@ import type {
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
 import { PlatformResolutionsUnreadError } from '../../domain/ports/platform-models.port';
+import { isoDateOf } from '../../domain/value-objects/utc-day';
 import { createIndexedModel } from '../../testing/create-indexed-model';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
+import {
+  FIXTURE_DATE,
+  FIXTURE_INDEX,
+  fixtureRow,
+} from '../../testing/fixture-index';
 import {
   createModelResolutionRepositoryStub,
   seededResolution,
 } from '../../testing/platform-resolutions';
-import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import type { WebhookAlertService } from '../alerting/webhook-alert.service';
 import { CatalogAlertsWriter } from './catalog-alerts.writer';
 import { CatalogSyncTask } from './catalog-sync.task';
@@ -99,15 +102,12 @@ if (WATCHED_SLUGS.length < MIN_WATCHED_MODELS) {
 const [WATCHED_SLUG] = WATCHED_SLUGS;
 const WATCHED_ID = `${OPENROUTER_ID_PREFIX}${WATCHED_SLUG}`;
 
-const RETIRING = MODEL_INDEX_SNAPSHOT.find((row) => row.retiresAt !== null);
-if (!RETIRING) {
-  throw new Error('the sync spec needs a snapshot row with a retirement date');
-}
+const RETIRING = fixtureRow('openrouter:google/gemini-2.5-pro');
 
 const DEEPSEEK_NEWCOMER = createIndexedModel({
   id: 'openrouter:deepseek/deepseek-v9-ultra',
   family: 'deepseek-ultra',
-  releasedAt: MODEL_INDEX_SNAPSHOT_DATE,
+  releasedAt: isoDateOf(FIXTURE_DATE),
 });
 
 function indexWrite(
@@ -193,7 +193,7 @@ function make(
     getPinnedModelIds: vi.fn().mockResolvedValue(options.pinned ?? []),
   };
   const index = createModelIndexRepositoryStub(async () => [
-    ...(options.listed ?? []),
+    ...(options.listed ?? FIXTURE_INDEX),
   ]);
   const resolutions = createModelResolutionRepositoryStub(async () => [
     ...(options.resolutions ?? SEED_RESOLUTIONS),
@@ -244,7 +244,7 @@ describe('CatalogSyncTask', () => {
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(SNAPSHOT_DATE);
+    vi.setSystemTime(FIXTURE_DATE);
     errorLog = vi
       .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => undefined);
@@ -873,11 +873,18 @@ describe('CatalogSyncTask', () => {
   });
 
   it('keeps a pin the snapshot floor serves while its provider lists no row', async () => {
-    const { task, repo } = make({ pinned: [PLATFORM_SEED_MODELS.balanced] });
+    const { task, repo } = make({
+      pinned: [PLATFORM_SEED_MODELS.balanced],
+      listed: [],
+    });
 
     await task.run();
 
-    expect(repo.createAlert).not.toHaveBeenCalled();
+    expect(repo.createAlert).not.toHaveBeenCalledWith(
+      PLATFORM_SEED_MODELS.balanced,
+      'pin_unavailable',
+      expect.any(String)
+    );
   });
 
   it('re-raises a resolved pin_unavailable on the next sync', async () => {
@@ -945,7 +952,7 @@ describe('CatalogSyncTask', () => {
 
   it('raises family_drift after a concluded OpenRouter batch', async () => {
     const { task, repo, indexWriter } = make({
-      listed: [...MODEL_INDEX_SNAPSHOT, DEEPSEEK_NEWCOMER],
+      listed: [...FIXTURE_INDEX, DEEPSEEK_NEWCOMER],
     });
     indexWriter.write.mockResolvedValueOnce(
       indexWrite({ concluded: [OPENROUTER_PROVIDER] })
@@ -962,7 +969,7 @@ describe('CatalogSyncTask', () => {
 
   it('raises no family_drift while the resolutions are unreadable', async () => {
     const { task, repo, indexWriter, resolutions } = make({
-      listed: [...MODEL_INDEX_SNAPSHOT, DEEPSEEK_NEWCOMER],
+      listed: [...FIXTURE_INDEX, DEEPSEEK_NEWCOMER],
     });
     indexWriter.write.mockResolvedValueOnce(
       indexWrite({ concluded: [OPENROUTER_PROVIDER] })
@@ -976,7 +983,7 @@ describe('CatalogSyncTask', () => {
 
   it('raises no family_drift when the OpenRouter batch did not conclude', async () => {
     const { task, repo } = make({
-      listed: [...MODEL_INDEX_SNAPSHOT, DEEPSEEK_NEWCOMER],
+      listed: [...FIXTURE_INDEX, DEEPSEEK_NEWCOMER],
     });
 
     await task.run();

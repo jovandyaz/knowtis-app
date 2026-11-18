@@ -1,16 +1,11 @@
 import {
-  MODEL_INDEX_SNAPSHOT,
   ModelIndexCatalog,
   type IndexedModel,
   type ModelCatalog,
 } from '@jovandyaz/llm-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  MODEL_INTENTS,
-  type ByokProvider,
-  type ModelIntent,
-} from '@knowtis/shared-types';
+import type { ByokProvider, ModelIntent } from '@knowtis/shared-types';
 
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import {
@@ -37,14 +32,14 @@ import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createExecutionContext } from '../../testing/create-execution-context';
 import { createIndexedModel } from '../../testing/create-indexed-model';
 import {
+  FIXTURE_CATALOG,
+  FIXTURE_DATE,
+  FIXTURE_INDEX,
+} from '../../testing/fixture-index';
+import {
   createResolutionsStub,
   seededResolution,
 } from '../../testing/platform-resolutions';
-import {
-  createSnapshotIndex,
-  SNAPSHOT_DATE,
-} from '../../testing/snapshot-index';
-import { snapshotRouteId } from '../../testing/snapshot-route';
 import { SelectableModelsService } from './selectable-models.service';
 
 const SONNET_5 = 'anthropic:claude-sonnet-5';
@@ -88,7 +83,7 @@ function makeSelectableModelsService(
   catalog: ModelCatalog,
   registry: RegistryStub,
   promoted: PromotedCacheStub,
-  index: IndexStub = createSnapshotIndex(),
+  index: IndexStub = { catalog: () => FIXTURE_CATALOG },
   resolutions: Pick<
     PlatformResolutionCache,
     'platformBilledModelIds' | 'activeModelIds'
@@ -181,6 +176,15 @@ function listed(
 }
 
 describe('SelectableModelsService', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(FIXTURE_DATE);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('derives costClass from outputCostPerToken across tiers', () => {
     const ids = [HAIKU_4_5, SONNET_5_5, OPUS_5_5];
     const svc = makeService({
@@ -278,15 +282,6 @@ describe('SelectableModelsService', () => {
   });
 
   describe('BYOK routes', () => {
-    beforeEach(() => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(SNAPSHOT_DATE);
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
     it('lists each route a key reaches with its index name and the intent copy', () => {
       const route = listed(makeOpenService(), OPENROUTER_KEY).find(
         (m) => m.id === 'openrouter:anthropic/claude-sonnet-5.5'
@@ -303,7 +298,7 @@ describe('SelectableModelsService', () => {
     });
 
     it('resolves the selectors once per served index catalog', () => {
-      const catalog = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
+      const catalog = new ModelIndexCatalog(FIXTURE_INDEX);
       const all = vi.spyOn(catalog, 'all');
       const service = makeOpenService([], { catalog: () => catalog });
 
@@ -314,7 +309,7 @@ describe('SelectableModelsService', () => {
     });
 
     it('resolves the selectors again once the index serves a new catalog', () => {
-      let served = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
+      let served = new ModelIndexCatalog(FIXTURE_INDEX);
       const service = makeOpenService([], { catalog: () => served });
       const balancedOf = () =>
         service
@@ -323,29 +318,26 @@ describe('SelectableModelsService', () => {
 
       expect(balancedOf()).toMatchObject({ modelId: SONNET_5_5 });
       served = new ModelIndexCatalog(
-        MODEL_INDEX_SNAPSHOT.filter((row) => row.id !== SONNET_5_5)
+        FIXTURE_INDEX.filter((row) => row.id !== SONNET_5_5)
       );
       expect(balancedOf()).toMatchObject({ modelId: SONNET_5 });
     });
 
     it('resolves the selectors again on the next UTC day for the same catalog', () => {
-      const catalog = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
+      const catalog = new ModelIndexCatalog(FIXTURE_INDEX);
       const all = vi.spyOn(catalog, 'all');
       const service = makeOpenService([], { catalog: () => catalog });
 
       listed(service, ANTHROPIC_KEY);
-      vi.setSystemTime(utcDayOf(SNAPSHOT_DATE).resetsAt);
+      vi.setSystemTime(utcDayOf(FIXTURE_DATE).resetsAt);
       listed(service, ANTHROPIC_KEY);
 
       expect(all).toHaveBeenCalledTimes(2);
     });
 
     it("builds the key catalog from the caller's entitlements", () => {
-      const [fast, balanced, powerful] = MODEL_INTENTS.map((intent) =>
-        snapshotRouteId(intent, 'anthropic')
-      );
       const entitlements = new Map<ByokProvider, ReadonlySet<string>>([
-        ['anthropic', entitledIdsOf([fast, powerful].map(slugOf))],
+        ['anthropic', entitledIdsOf([HAIKU_4_5, OPUS_5_5].map(slugOf))],
       ]);
 
       const catalog = makeOpenService().catalogFor(
@@ -355,7 +347,10 @@ describe('SelectableModelsService', () => {
         entitlements
       );
 
-      expect(catalog.models.map((m) => m.model.id)).toEqual([fast, powerful]);
+      expect(catalog.models.map((m) => m.model.id)).toEqual([
+        HAIKU_4_5,
+        OPUS_5_5,
+      ]);
       expect(catalog.intents).toContainEqual({
         intent: 'balanced',
         available: false,
@@ -365,17 +360,17 @@ describe('SelectableModelsService', () => {
         makeOpenService()
           .catalogFor(ANTHROPIC_KEY, INTENTS, null, NO_ENTITLEMENTS)
           .models.map((m) => m.model.id)
-      ).toContain(balanced);
+      ).toContain(SONNET_5_5);
     });
 
     it('drops a route from the same catalog once its retirement enters the window', () => {
-      const lastEligibleDay = utcDayOf(SNAPSHOT_DATE);
+      const lastEligibleDay = utcDayOf(FIXTURE_DATE);
       const retiresAt = new Date(lastEligibleDay.start);
       retiresAt.setUTCDate(retiresAt.getUTCDate() + RETIREMENT_WINDOW_DAYS + 1);
       const service = makeOpenService(
         [],
         indexOf(
-          MODEL_INDEX_SNAPSHOT.map((row) =>
+          FIXTURE_INDEX.map((row) =>
             row.id === SONNET_5_5
               ? { ...row, retiresAt: utcDayOf(retiresAt).key }
               : row
@@ -643,15 +638,6 @@ describe('SelectableModelsService', () => {
   });
 
   describe('factsFor', () => {
-    beforeEach(() => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(SNAPSHOT_DATE);
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
     const GRACE_MS = RESOLUTION_GRACE_DAYS * MS_PER_DAY;
 
     function graceService(overrides: Partial<ModelResolution>) {
@@ -745,7 +731,7 @@ describe('SelectableModelsService', () => {
     it('keeps a model the admin re-pinned away from platform-billed for the grace window: not_in_tier, never key_removed', () => {
       const service = graceService({
         releasedModelId: GLM,
-        releasedAt: new Date(SNAPSHOT_DATE.getTime() - GRACE_MS),
+        releasedAt: new Date(FIXTURE_DATE.getTime() - GRACE_MS),
       });
 
       expect(
@@ -762,7 +748,7 @@ describe('SelectableModelsService', () => {
     it('keeps a model an activation replaced platform-billed for the grace window', () => {
       const service = graceService({
         previousModelId: GLM,
-        changedAt: new Date(SNAPSHOT_DATE.getTime() - GRACE_MS),
+        changedAt: new Date(FIXTURE_DATE.getTime() - GRACE_MS),
       });
 
       expect(
@@ -775,7 +761,7 @@ describe('SelectableModelsService', () => {
     describe('a model an activation replaced, inside its grace window', () => {
       const REPLACED_IN_GRACE = {
         previousModelId: GLM,
-        changedAt: new Date(SNAPSHOT_DATE.getTime() - GRACE_MS),
+        changedAt: new Date(FIXTURE_DATE.getTime() - GRACE_MS),
       };
 
       it('falls back to a held key with key_removed when an own-keys caller resumes on a platform model in its grace window', () => {
@@ -830,7 +816,7 @@ describe('SelectableModelsService', () => {
     it('stops billing a released model to the platform once the grace ends', () => {
       const service = graceService({
         releasedModelId: GLM,
-        releasedAt: new Date(SNAPSHOT_DATE.getTime() - GRACE_MS - 1),
+        releasedAt: new Date(FIXTURE_DATE.getTime() - GRACE_MS - 1),
       });
 
       expect(

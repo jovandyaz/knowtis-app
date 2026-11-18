@@ -34,8 +34,8 @@ import type {
   UpstreamCatalog,
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
-import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';
-import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
+import { platformFloorRowsOf } from '../../testing/create-floor-rows';
+import { FIXTURE_DATE, FIXTURE_INDEX } from '../../testing/fixture-index';
 import type { WebhookAlertService } from '../alerting/webhook-alert.service';
 import { ModelIndexWriter } from './model-index.writer';
 
@@ -56,19 +56,11 @@ if (WATCHED_SLUGS.length === 0) {
 
 const [WATCHED_SLUG] = WATCHED_SLUGS;
 const WATCHED_ID = `openrouter:${WATCHED_SLUG}`;
-const OPENROUTER_ROUTE_SLUGS = MODEL_INTENTS.flatMap((intent) => {
-  const route = resolveByokIntent(
-    intent,
-    'openrouter',
-    MODEL_INDEX_SNAPSHOT,
-    SNAPSHOT_DATE
-  );
-  return route === null ? [] : [route.id.slice(OPENROUTER_ID_PREFIX.length)];
-});
 
-if (OPENROUTER_ROUTE_SLUGS.length !== MODEL_INTENTS.length) {
-  throw new Error('the writer spec needs an OpenRouter route for every intent');
+function openRouterSlugOf(row: IndexedModel): string {
+  return row.id.slice(OPENROUTER_ID_PREFIX.length);
 }
+
 const OPENROUTER_ROUTE_KEYS = MODEL_INTENTS.map((intent) =>
   byokFloorKey(intent, 'openrouter')
 );
@@ -76,13 +68,43 @@ const QWEN_ID = `openrouter:${QWEN_SLUG}`;
 const PLATFORM_FLOOR_KEYS = MODEL_INTENTS.map(
   (intent) => SELECTOR_KEY_BY_INTENT[intent]
 );
-const PLATFORM_SLUGS = PLATFORM_FLOOR_ROWS.map((row) =>
-  row.id.slice(OPENROUTER_ID_PREFIX.length)
-);
+const PLATFORM_FLOOR_ROWS = platformFloorRowsOf(FIXTURE_INDEX, FIXTURE_DATE);
+const PLATFORM_SLUGS = PLATFORM_FLOOR_ROWS.map(openRouterSlugOf);
 const [, BALANCED_PLATFORM_ROW] = PLATFORM_FLOOR_ROWS;
-const BALANCED_PLATFORM_SLUG = BALANCED_PLATFORM_ROW.id.slice(
-  OPENROUTER_ID_PREFIX.length
+const BALANCED_PLATFORM_SLUG = openRouterSlugOf(BALANCED_PLATFORM_ROW);
+
+// A provider that lists no rows is judged against the vendored snapshot, so the tests of that case build their reads from it.
+const SNAPSHOT_PLATFORM_ROWS = platformFloorRowsOf(
+  MODEL_INDEX_SNAPSHOT,
+  FIXTURE_DATE
 );
+const SNAPSHOT_PLATFORM_SLUGS = SNAPSHOT_PLATFORM_ROWS.map(openRouterSlugOf);
+const [, SNAPSHOT_BALANCED_ROW] = SNAPSHOT_PLATFORM_ROWS;
+const SNAPSHOT_OPENROUTER_ROUTE_SLUGS = MODEL_INTENTS.flatMap((intent) => {
+  const route = resolveByokIntent(
+    intent,
+    'openrouter',
+    MODEL_INDEX_SNAPSHOT,
+    FIXTURE_DATE
+  );
+  return route === null ? [] : [openRouterSlugOf(route)];
+});
+const SNAPSHOT_FAMILY_ROW = MODEL_INDEX_SNAPSHOT.find(
+  (row) =>
+    row.provider === 'openrouter' &&
+    row.family !== null &&
+    !SNAPSHOT_PLATFORM_SLUGS.includes(openRouterSlugOf(row))
+);
+
+if (SNAPSHOT_OPENROUTER_ROUTE_SLUGS.length !== MODEL_INTENTS.length) {
+  throw new Error('the writer spec needs an OpenRouter route for every intent');
+}
+
+if (SNAPSHOT_FAMILY_ROW === undefined) {
+  throw new Error(
+    'the writer spec needs a snapshot OpenRouter row with a family'
+  );
+}
 
 function upstreamModel(id: string): UpstreamModel {
   return {
@@ -113,15 +135,9 @@ function routeModel(id: string): UpstreamModel {
 }
 
 /** The OpenRouter read of a platform floor row: its own prices, window, release and capabilities. */
-function platformModel(slug: string): UpstreamModel {
-  const row = PLATFORM_FLOOR_ROWS.find(
-    (floor) => floor.id === `${OPENROUTER_ID_PREFIX}${slug}`
-  );
-  if (row === undefined) {
-    throw new Error(`the writer spec needs the platform floor row ${slug}`);
-  }
+function platformModel(row: IndexedModel): UpstreamModel {
   return {
-    ...upstreamModel(slug),
+    ...upstreamModel(openRouterSlugOf(row)),
     createdAt: new Date(`${row.releasedAt}T00:00:00.000Z`),
     promptCostPerToken: row.inputCostPerToken ?? 0,
     completionCostPerToken: row.outputCostPerToken ?? 0,
@@ -140,7 +156,7 @@ function openRouterCatalog(
       upstreamModel(WATCHED_SLUG),
       upstreamModel(QWEN_SLUG),
       upstreamModel(DEEPSEEK_SLUG),
-      ...PLATFORM_SLUGS.map(platformModel),
+      ...PLATFORM_FLOOR_ROWS.map(platformModel),
     ],
     complete: true,
     discarded: [],
@@ -198,14 +214,14 @@ const OPENROUTER_ROWS = openRouterCatalog().models.length;
 
 const SNAPSHOT_OPENROUTER_SLUGS = MODEL_INDEX_SNAPSHOT.filter(
   (row) => row.provider === 'openrouter'
-).map((row) => row.id.slice(OPENROUTER_ID_PREFIX.length));
+).map(openRouterSlugOf);
 
 /** A first OpenRouter read as large as the snapshot rows it replaces. */
 const FRESH_OPENROUTER_MODELS = [
   ...SNAPSHOT_OPENROUTER_SLUGS.filter(
-    (slug) => !PLATFORM_SLUGS.includes(slug)
+    (slug) => !SNAPSHOT_PLATFORM_SLUGS.includes(slug)
   ).map(routeModel),
-  ...PLATFORM_SLUGS.map(platformModel),
+  ...SNAPSHOT_PLATFORM_ROWS.map(platformModel),
 ];
 
 function modelsDevCatalog(
@@ -268,7 +284,7 @@ describe('ModelIndexWriter', () => {
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(SNAPSHOT_DATE);
+    vi.setSystemTime(FIXTURE_DATE);
     logLog = vi
       .spyOn(Logger.prototype, 'log')
       .mockImplementation(() => undefined);
@@ -448,8 +464,6 @@ describe('ModelIndexWriter', () => {
   describe('OpenRouter enrichment carried forward', () => {
     const CLAUDE_SLUG = 'anthropic/claude-sonnet-5.5';
     const CLAUDE_OPENROUTER_ID = `${OPENROUTER_ID_PREFIX}${CLAUDE_SLUG}`;
-    const SNAPSHOT_SLUG = 'amazon/nova-2-lite-v1';
-    const SNAPSHOT_OPENROUTER_ID = `${OPENROUTER_ID_PREFIX}${SNAPSHOT_SLUG}`;
 
     const listedClaude: IndexedModel = fromOpenRouter(
       upstreamModel(CLAUDE_SLUG),
@@ -531,9 +545,6 @@ describe('ModelIndexWriter', () => {
     });
 
     it('should carry the family from the snapshot row while OpenRouter lists none', async () => {
-      const snapshotFamily = MODEL_INDEX_SNAPSHOT.find(
-        (row) => row.id === SNAPSHOT_OPENROUTER_ID
-      )?.family;
       const { writer, repo } = make(
         LISTED_ROWS.filter((row) => row.provider !== 'openrouter')
       );
@@ -543,9 +554,8 @@ describe('ModelIndexWriter', () => {
         null
       );
 
-      expect(snapshotFamily).toBeTruthy();
-      expect(upsertedRow(repo, SNAPSHOT_OPENROUTER_ID)?.family).toBe(
-        snapshotFamily
+      expect(upsertedRow(repo, SNAPSHOT_FAMILY_ROW.id)?.family).toBe(
+        SNAPSHOT_FAMILY_ROW.family
       );
     });
   });
@@ -562,7 +572,7 @@ describe('ModelIndexWriter', () => {
     await writer.write(
       openRouterCatalog({
         models: [
-          ...PLATFORM_SLUGS.map(platformModel),
+          ...PLATFORM_FLOOR_ROWS.map(platformModel),
           upstreamModel(DEEPSEEK_SLUG),
         ],
       }),
@@ -851,8 +861,8 @@ describe('ModelIndexWriter', () => {
 
   it('should hold a first OpenRouter batch to the snapshot rows it replaces, so a tiny read concludes nothing', async () => {
     const tiny = [
-      ...PLATFORM_SLUGS.map(platformModel),
-      ...OPENROUTER_ROUTE_SLUGS.map(routeModel),
+      ...SNAPSHOT_PLATFORM_ROWS.map(platformModel),
+      ...SNAPSHOT_OPENROUTER_ROUTE_SLUGS.map(routeModel),
       upstreamModel(DEEPSEEK_SLUG),
     ];
     const { writer, repo } = make([]);
@@ -1062,8 +1072,8 @@ describe('ModelIndexWriter', () => {
     const balancedFamilySlugs = MODEL_INDEX_SNAPSHOT.filter(
       (row) =>
         row.provider === 'openrouter' &&
-        row.family === BALANCED_PLATFORM_ROW.family
-    ).map((row) => row.id.slice(OPENROUTER_ID_PREFIX.length));
+        row.family === SNAPSHOT_BALANCED_ROW.family
+    ).map(openRouterSlugOf);
     const { writer, repo } = make(
       LISTED_ROWS.filter((row) => row.provider !== 'openrouter')
     );
@@ -1073,7 +1083,7 @@ describe('ModelIndexWriter', () => {
         models: FRESH_OPENROUTER_MODELS.filter(
           (model) => !balancedFamilySlugs.includes(model.id)
         ),
-        discarded: [BALANCED_PLATFORM_SLUG],
+        discarded: [openRouterSlugOf(SNAPSHOT_BALANCED_ROW)],
       }),
       modelsDevCatalog()
     );

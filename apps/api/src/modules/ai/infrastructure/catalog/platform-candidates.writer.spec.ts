@@ -1,4 +1,4 @@
-import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@jovandyaz/llm-router';
+import type { IndexedModel } from '@jovandyaz/llm-router';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +9,7 @@ import {
   type ModelResolution,
 } from '../../domain/model-catalog/platform-resolution';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
+import { FIXTURE_DATE, FIXTURE_INDEX } from '../../testing/fixture-index';
 import {
   createModelResolutionRepositoryStub,
   seededResolution,
@@ -60,27 +61,27 @@ describe('PlatformCandidatesWriter', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('pends each selector resolution that differs from its seeded active model', async () => {
-    const { writer, repo } = make(MODEL_INDEX_SNAPSHOT);
-    expect(await writer.write(SNAPSHOT_DATE)).toBe(3);
+    const { writer, repo } = make(FIXTURE_INDEX);
+    expect(await writer.write(FIXTURE_DATE)).toBe(3);
     expect(vi.mocked(repo.setPending).mock.calls).toEqual(
       expect.arrayContaining([
         [
           'platform.fast',
           'openrouter:deepseek/deepseek-v4.1-flash',
           NOTHING_PENDING,
-          SNAPSHOT_DATE,
+          FIXTURE_DATE,
         ],
         [
           'platform.balanced',
           'openrouter:deepseek/deepseek-v4-pro-0813',
           NOTHING_PENDING,
-          SNAPSHOT_DATE,
+          FIXTURE_DATE,
         ],
         [
           'platform.powerful',
           'openrouter:z-ai/glm-5.3',
           NOTHING_PENDING,
-          SNAPSHOT_DATE,
+          FIXTURE_DATE,
         ],
       ])
     );
@@ -92,87 +93,87 @@ describe('PlatformCandidatesWriter', () => {
   });
 
   it('pends nothing when the candidate is the active model', async () => {
-    const { writer, repo } = make(MODEL_INDEX_SNAPSHOT, [
+    const { writer, repo } = make(FIXTURE_INDEX, [
       seededResolution('balanced', {
         activeModelId: 'openrouter:deepseek/deepseek-v4-pro-0813',
       }),
     ]);
-    await writer.write(SNAPSHOT_DATE);
+    await writer.write(FIXTURE_DATE);
     expect(repo.setPending).not.toHaveBeenCalled();
   });
 
   it('does not pend again a candidate that already failed', async () => {
-    const { writer, repo } = make(MODEL_INDEX_SNAPSHOT, [
+    const { writer, repo } = make(FIXTURE_INDEX, [
       seededResolution('powerful', {
         pendingModelId: 'openrouter:z-ai/glm-5.3',
         gateStatus: 'failed',
       }),
     ]);
-    await writer.write(SNAPSHOT_DATE);
+    await writer.write(FIXTURE_DATE);
     expect(repo.setPending).not.toHaveBeenCalled();
   });
 
   it('pends a new candidate only while the failed verdict it read still stands', async () => {
-    const { writer, repo } = make(MODEL_INDEX_SNAPSHOT, [
+    const { writer, repo } = make(FIXTURE_INDEX, [
       seededResolution('powerful', {
         pendingModelId: 'openrouter:z-ai/glm-5.1',
         gateStatus: 'failed',
       }),
     ]);
-    await writer.write(SNAPSHOT_DATE);
+    await writer.write(FIXTURE_DATE);
     expect(repo.setPending).toHaveBeenCalledWith(
       'platform.powerful',
       'openrouter:z-ai/glm-5.3',
       { pendingModelId: 'openrouter:z-ai/glm-5.1', gateStatus: 'failed' },
-      SNAPSHOT_DATE
+      FIXTURE_DATE
     );
   });
 
   it('clears a pending candidate once the selector picks the active model again', async () => {
-    const { writer, repo } = make(MODEL_INDEX_SNAPSHOT, [
+    const { writer, repo } = make(FIXTURE_INDEX, [
       seededResolution('balanced', {
         activeModelId: 'openrouter:deepseek/deepseek-v4-pro-0813',
         pendingModelId: 'openrouter:deepseek/deepseek-v4-pro',
         gateStatus: 'pending',
       }),
     ]);
-    expect(await writer.write(SNAPSHOT_DATE)).toBe(1);
+    expect(await writer.write(FIXTURE_DATE)).toBe(1);
     expect(repo.clearPending).toHaveBeenCalledWith(
       'platform.balanced',
       'openrouter:deepseek/deepseek-v4-pro',
-      SNAPSHOT_DATE
+      FIXTURE_DATE
     );
     expect(repo.setPending).not.toHaveBeenCalled();
   });
 
   it('leaves a failed candidate untouched when the selector picks the active model again', async () => {
-    const { writer, repo } = make(MODEL_INDEX_SNAPSHOT, [
+    const { writer, repo } = make(FIXTURE_INDEX, [
       seededResolution('balanced', {
         activeModelId: 'openrouter:deepseek/deepseek-v4-pro-0813',
         pendingModelId: 'openrouter:deepseek/deepseek-v4-pro',
         gateStatus: 'failed',
       }),
     ]);
-    expect(await writer.write(SNAPSHOT_DATE)).toBe(0);
+    expect(await writer.write(FIXTURE_DATE)).toBe(0);
     expect(repo.clearPending).not.toHaveBeenCalled();
   });
 
   it('pends nothing for a selector that resolves no row', async () => {
     const { writer, repo } = make(
-      MODEL_INDEX_SNAPSHOT.filter((row) => row.family !== 'deepseek-flash'),
+      FIXTURE_INDEX.filter((row) => row.family !== 'deepseek-flash'),
       [seededResolution('fast')]
     );
-    await writer.write(SNAPSHOT_DATE);
+    await writer.write(FIXTURE_DATE);
     expect(repo.setPending).not.toHaveBeenCalled();
   });
 
   it('raises selector_empty when a selector has no candidate', async () => {
     const { writer, alerts } = make(
-      MODEL_INDEX_SNAPSHOT.filter((row) => row.family !== 'deepseek-flash'),
+      FIXTURE_INDEX.filter((row) => row.family !== 'deepseek-flash'),
       [seededResolution('fast')]
     );
 
-    await writer.write(SNAPSHOT_DATE);
+    await writer.write(FIXTURE_DATE);
 
     expect(raised(alerts)).toEqual([
       {
@@ -184,11 +185,9 @@ describe('PlatformCandidatesWriter', () => {
   });
 
   it('raises resolution_pending when it pends', async () => {
-    const { writer, alerts } = make(MODEL_INDEX_SNAPSHOT, [
-      seededResolution('fast'),
-    ]);
+    const { writer, alerts } = make(FIXTURE_INDEX, [seededResolution('fast')]);
 
-    await writer.write(SNAPSHOT_DATE);
+    await writer.write(FIXTURE_DATE);
 
     expect(raised(alerts)).toEqual([
       {
@@ -200,7 +199,7 @@ describe('PlatformCandidatesWriter', () => {
   });
 
   it('raises nothing for a pend another writer beat it to, or for a clear', async () => {
-    const { writer, repo, alerts } = make(MODEL_INDEX_SNAPSHOT, [
+    const { writer, repo, alerts } = make(FIXTURE_INDEX, [
       seededResolution('fast'),
       seededResolution('balanced', {
         activeModelId: 'openrouter:deepseek/deepseek-v4-pro-0813',
@@ -210,7 +209,7 @@ describe('PlatformCandidatesWriter', () => {
     ]);
     vi.mocked(repo.setPending).mockResolvedValue(false);
 
-    await writer.write(SNAPSHOT_DATE);
+    await writer.write(FIXTURE_DATE);
 
     expect(repo.clearPending).toHaveBeenCalledTimes(1);
     expect(raised(alerts)).toEqual([]);
@@ -218,14 +217,14 @@ describe('PlatformCandidatesWriter', () => {
 
   describe('the resolution_pending alert of the model it stops awaiting the gate', () => {
     it('is resolved when a newer candidate replaces a gate-pending one', async () => {
-      const { writer, alerts } = make(MODEL_INDEX_SNAPSHOT, [
+      const { writer, alerts } = make(FIXTURE_INDEX, [
         seededResolution('powerful', {
           pendingModelId: 'openrouter:z-ai/glm-5.1',
           gateStatus: 'pending',
         }),
       ]);
 
-      expect(await writer.write(SNAPSHOT_DATE)).toBe(1);
+      expect(await writer.write(FIXTURE_DATE)).toBe(1);
 
       expect(alerts.resolvePending).toHaveBeenCalledWith(
         'openrouter:z-ai/glm-5.1'
@@ -233,7 +232,7 @@ describe('PlatformCandidatesWriter', () => {
     });
 
     it('is resolved when the selector clears its pending candidate', async () => {
-      const { writer, alerts } = make(MODEL_INDEX_SNAPSHOT, [
+      const { writer, alerts } = make(FIXTURE_INDEX, [
         seededResolution('balanced', {
           activeModelId: 'openrouter:deepseek/deepseek-v4-pro-0813',
           pendingModelId: 'openrouter:deepseek/deepseek-v4-pro',
@@ -241,7 +240,7 @@ describe('PlatformCandidatesWriter', () => {
         }),
       ]);
 
-      await writer.write(SNAPSHOT_DATE);
+      await writer.write(FIXTURE_DATE);
 
       expect(alerts.resolvePending).toHaveBeenCalledWith(
         'openrouter:deepseek/deepseek-v4-pro'
@@ -249,20 +248,20 @@ describe('PlatformCandidatesWriter', () => {
     });
 
     it('is left to the verdict for a replaced failed candidate', async () => {
-      const { writer, alerts } = make(MODEL_INDEX_SNAPSHOT, [
+      const { writer, alerts } = make(FIXTURE_INDEX, [
         seededResolution('powerful', {
           pendingModelId: 'openrouter:z-ai/glm-5.1',
           gateStatus: 'failed',
         }),
       ]);
 
-      expect(await writer.write(SNAPSHOT_DATE)).toBe(1);
+      expect(await writer.write(FIXTURE_DATE)).toBe(1);
 
       expect(alerts.resolvePending).not.toHaveBeenCalled();
     });
 
     it('stays open when another writer changed the row first', async () => {
-      const { writer, repo, alerts } = make(MODEL_INDEX_SNAPSHOT, [
+      const { writer, repo, alerts } = make(FIXTURE_INDEX, [
         seededResolution('powerful', {
           pendingModelId: 'openrouter:z-ai/glm-5.1',
           gateStatus: 'pending',
@@ -276,14 +275,14 @@ describe('PlatformCandidatesWriter', () => {
       vi.mocked(repo.setPending).mockResolvedValue(false);
       vi.mocked(repo.clearPending).mockResolvedValue(false);
 
-      expect(await writer.write(SNAPSHOT_DATE)).toBe(0);
+      expect(await writer.write(FIXTURE_DATE)).toBe(0);
 
       expect(alerts.resolvePending).not.toHaveBeenCalled();
     });
   });
 
   it('logs each candidate it pends or clears', async () => {
-    const { writer } = make(MODEL_INDEX_SNAPSHOT, [
+    const { writer } = make(FIXTURE_INDEX, [
       seededResolution('fast'),
       seededResolution('balanced', {
         activeModelId: 'openrouter:deepseek/deepseek-v4-pro-0813',
@@ -291,7 +290,7 @@ describe('PlatformCandidatesWriter', () => {
         gateStatus: 'pending',
       }),
     ]);
-    await writer.write(SNAPSHOT_DATE);
+    await writer.write(FIXTURE_DATE);
     expect(log).toHaveBeenCalledWith({
       event: 'ai.model_resolution.pending',
       selectorKey: 'platform.fast',
@@ -304,7 +303,7 @@ describe('PlatformCandidatesWriter', () => {
   });
 
   it('counts nothing and logs the skip when the row changed since it was read', async () => {
-    const { writer, repo } = make(MODEL_INDEX_SNAPSHOT, [
+    const { writer, repo } = make(FIXTURE_INDEX, [
       seededResolution('fast'),
       seededResolution('balanced', {
         activeModelId: 'openrouter:deepseek/deepseek-v4-pro-0813',
@@ -315,7 +314,7 @@ describe('PlatformCandidatesWriter', () => {
     vi.mocked(repo.setPending).mockResolvedValue(false);
     vi.mocked(repo.clearPending).mockResolvedValue(false);
 
-    expect(await writer.write(SNAPSHOT_DATE)).toBe(0);
+    expect(await writer.write(FIXTURE_DATE)).toBe(0);
     expect(log).toHaveBeenCalledWith({
       event: 'ai.model_resolution.pending_skipped',
       selectorKey: 'platform.fast',

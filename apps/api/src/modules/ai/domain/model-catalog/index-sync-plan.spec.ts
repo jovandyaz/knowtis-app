@@ -1,13 +1,16 @@
 import {
   INDEX_PROVIDERS,
-  MODEL_INDEX_SNAPSHOT,
   type IndexedModel,
   type IndexProvider,
 } from '@jovandyaz/llm-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';
-import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
+import { platformFloorRowsOf } from '../../testing/create-floor-rows';
+import {
+  FIXTURE_DATE,
+  FIXTURE_INDEX,
+  fixtureRow,
+} from '../../testing/fixture-index';
 import { isoDateOf, MS_PER_DAY } from '../value-objects/utc-day';
 import { byokFloorKey } from './floor-models';
 import {
@@ -23,18 +26,11 @@ import { SELECTOR_KEY_BY_INTENT } from './platform-resolution';
 
 const NOTHING_SERVED: readonly IndexedModel[] = [];
 
-function snapshotRow(id: string): IndexedModel {
-  const row = MODEL_INDEX_SNAPSHOT.find((snapshot) => snapshot.id === id);
-  if (row === undefined) {
-    throw new Error(`the plan spec needs the snapshot row ${id}`);
-  }
-  return row;
-}
-
+const PLATFORM_FLOOR_ROWS = platformFloorRowsOf(FIXTURE_INDEX, FIXTURE_DATE);
 const [, BALANCED_FLOOR_ROW] = PLATFORM_FLOOR_ROWS;
 const RETIRED_DEFAULT_ID = 'openrouter:deepseek/deepseek-v3.2';
 const OLDER_BALANCED_ID = 'openrouter:deepseek/deepseek-v4-pro';
-const ANTHROPIC_FAST_ROUTE = snapshotRow('anthropic:claude-haiku-4-5');
+const ANTHROPIC_FAST_ROUTE = fixtureRow('anthropic:claude-haiku-4-5');
 
 const NOTHING_LISTED: Readonly<Record<IndexProvider, number>> = {
   anthropic: 0,
@@ -94,7 +90,7 @@ function batch(
 describe('planIndexSync', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(SNAPSHOT_DATE);
+    vi.setSystemTime(FIXTURE_DATE);
   });
 
   afterEach(() => {
@@ -302,9 +298,7 @@ describe('planIndexSync', () => {
   });
 
   it('accepts an OpenRouter batch that drops deepseek-v3.2', () => {
-    const listed = MODEL_INDEX_SNAPSHOT.filter(
-      (row) => row.provider === 'openrouter'
-    );
+    const listed = FIXTURE_INDEX.filter((row) => row.provider === 'openrouter');
     const openrouter: ProviderBatch = {
       provider: 'openrouter',
       rows: listed.filter((row) => row.id !== RETIRED_DEFAULT_ID),
@@ -314,19 +308,17 @@ describe('planIndexSync', () => {
 
     const plan = planIndexSync([openrouter], listed, listed);
 
-    expect(listed).toContain(snapshotRow(RETIRED_DEFAULT_ID));
+    expect(listed).toContain(fixtureRow(RETIRED_DEFAULT_ID));
     expect(plan.upserts).toEqual(openrouter.rows);
     expect(plan.concludeAbsence).toEqual(['openrouter']);
     expect(plan.rejected).toEqual([]);
   });
 
   it('accepts an OpenRouter batch whose balanced resolution enters its retirement window', () => {
-    const listed = MODEL_INDEX_SNAPSHOT.filter(
-      (row) => row.provider === 'openrouter'
-    );
+    const listed = FIXTURE_INDEX.filter((row) => row.provider === 'openrouter');
     const retiresAt = isoDateOf(
       new Date(
-        SNAPSHOT_DATE.getTime() + (RETIREMENT_WINDOW_DAYS - 1) * MS_PER_DAY
+        FIXTURE_DATE.getTime() + (RETIREMENT_WINDOW_DAYS - 1) * MS_PER_DAY
       )
     );
     const openrouter: ProviderBatch = {
@@ -341,7 +333,7 @@ describe('planIndexSync', () => {
     const plan = planIndexSync([openrouter], listed, listed);
 
     expect(
-      resolvePlatformIntent('balanced', openrouter.rows, SNAPSHOT_DATE)?.id
+      resolvePlatformIntent('balanced', openrouter.rows, FIXTURE_DATE)?.id
     ).toBe(OLDER_BALANCED_ID);
     expect(plan.upserts).toEqual(openrouter.rows);
     expect(plan.concludeAbsence).toEqual(['openrouter']);
