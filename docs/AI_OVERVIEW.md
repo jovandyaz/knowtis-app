@@ -56,6 +56,7 @@ Traces go to Langfuse through OpenTelemetry, with content redacted in production
 ## Where to read next
 
 - [Why the routing layer is in-process](./adr/0001-own-the-ai-routing-layer.md)
+- [Why extraction stops at the router](./adr/0002-stop-extracting-the-ai-layer.md)
 - [Fallback chain](./AI.md#cross-provider-fallback-chain) and [copilot model selection](./AI.md#copilot-model-selection)
 - [Eval harness](./AI.md#copilot-eval-harness) and [long-term memory](./AI.md#long-term-user-memory-a6b)
 - [BYOK](./AI.md#bring-your-own-key-byok)

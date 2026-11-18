@@ -82,7 +82,7 @@ Dependency direction is enforced with Nx module boundaries: `app → ui / data-a
 | Run it locally               | [Local setup](docs/LOCAL_SETUP.md)                                                                                                                    |
 | How the system fits together | [Architecture](docs/ARCHITECTURE.md)                                                                                                                  |
 | AI and the copilot           | [One-page overview](docs/AI_OVERVIEW.md), then the [full reference](docs/AI.md)                                                                       |
-| Decisions                    | [Own the AI routing layer](docs/adr/0001-own-the-ai-routing-layer.md)                                                                                 |
+| Decisions                    | [Own the AI routing layer](docs/adr/0001-own-the-ai-routing-layer.md), [stop extracting at the router](docs/adr/0002-stop-extracting-the-ai-layer.md) |
 | External AI clients          | [MCP server](docs/MCP.md)                                                                                                                             |
 | Sign-in and access           | [Authentication](docs/AUTH.md), [permissions](docs/PERMISSIONS.md)                                                                                    |
 | Sharing                      | [Access protocol](docs/SHARING_ACCESS_PROTOCOL.md), [people access contract](docs/PEOPLE_ACCESS_CONTRACT.md), [end-to-end tests](docs/SHARING_E2E.md) |
