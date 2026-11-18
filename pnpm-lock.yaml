@@ -75,8 +75,8 @@ importers:
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.71.1(react@19.2.1))
       '@jovandyaz/llm-router':
-        specifier: ^0.1.2
-        version: 0.1.2
+        specifier: ^0.2.0
+        version: 0.2.0
       '@langfuse/otel':
         specifier: 5.11.0
         version: 5.11.0(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/exporter-trace-otlp-http@0.218.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))
@@ -3751,9 +3751,9 @@ packages:
       typescript:
         optional: true
 
-  '@jovandyaz/llm-router@0.1.2':
-    resolution: {integrity: sha512-eBV4/dFXVGp2D5SOI/rT7RsYYJcUFQcpz4If8BMZfwmtUa74q43g4hgZhXR291pu4oOG2ZG3B2H8b4FZLnvIkQ==}
-    engines: {node: '>=20'}
+  '@jovandyaz/llm-router@0.2.0':
+    resolution: {integrity: sha512-iktbtaXagWbGKBXcWxZpTGn80bELvM27tTddA/cvyypuEFh569cXA7iA/P6XFeSQp0L2++o+Db7Pw3tdFtz9og==}
+    engines: {node: '>=22.12'}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -19575,7 +19575,7 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  '@jovandyaz/llm-router@0.1.2':
+  '@jovandyaz/llm-router@0.2.0':
     dependencies:
       gpt-tokenizer: 3.4.0
       zod: 4.4.3

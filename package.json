@@ -64,7 +64,7 @@
     "@hocuspocus/server": "^4.7.0",
     "@hono/node-server": "^1.19.14",
     "@hookform/resolvers": "^5.2.2",
-    "@jovandyaz/llm-router": "^0.1.2",
+    "@jovandyaz/llm-router": "^0.2.0",
     "@langfuse/otel": "5.11.0",
     "@langfuse/tracing": "^5.11.0",
     "@langfuse/vercel-ai-sdk": "^5.11.0",
