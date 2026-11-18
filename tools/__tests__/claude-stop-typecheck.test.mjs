@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -15,10 +16,10 @@ import { fileURLToPath } from 'node:url';
 
 import {
   decide,
-  insideWorkspace,
   MAX_CONSECUTIVE_BLOCKS,
   readBlockCount,
   readHookInput,
+  resolveTarget,
   runTypecheck,
   statePath,
   unusableRun,
@@ -191,24 +192,52 @@ test('the typecheck runs from the given tree and pins nx to it', () => {
   assert.equal(args, 'nx affected -t typecheck --base=HEAD');
 });
 
-test('a session inside the tree is covered, one beside it is not', () => {
-  const root = '/repo/main';
-  for (const cwd of [
-    '/repo/main',
-    '/repo/main/apps/api',
-    '/repo/main/./apps',
-  ]) {
-    assert.equal(insideWorkspace(cwd, root), true, `for ${cwd}`);
-  }
-  for (const cwd of ['/repo', '/repo/main-wt', '/repo/other', '/']) {
-    assert.equal(insideWorkspace(cwd, root), false, `for ${cwd}`);
-  }
-  for (const cwd of [7, {}, [], true, null, undefined]) {
-    assert.equal(
-      insideWorkspace(cwd, root),
-      false,
-      `for ${JSON.stringify(cwd)}`
-    );
+function git(cwd, ...args) {
+  const result = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+}
+
+/** A real repository with one commit, so `git worktree add` has a base. */
+function repo(prefix) {
+  const dir = realpathSync(scratch(prefix));
+  git(dir, 'init', '-q');
+  git(
+    dir,
+    '-c',
+    'user.name=t',
+    '-c',
+    'user.email=t@t',
+    'commit',
+    '-q',
+    '--allow-empty',
+    '-m',
+    'init'
+  );
+  return dir;
+}
+
+test('the target is the checkout or worktree the session is in', () => {
+  const root = repo('stop-typecheck-main-');
+  mkdirSync(join(root, 'apps', 'api'), { recursive: true });
+  const worktree = join(realpathSync(scratch('stop-typecheck-wt-')), 'wt');
+  git(root, 'worktree', 'add', '-q', '--detach', worktree);
+  mkdirSync(join(worktree, 'apps'), { recursive: true });
+
+  assert.equal(resolveTarget(root, root), root);
+  assert.equal(resolveTarget(join(root, 'apps', 'api'), root), root);
+  assert.equal(resolveTarget(worktree, root), worktree);
+  assert.equal(resolveTarget(join(worktree, 'apps'), root), worktree);
+  assert.equal(resolveTarget(undefined, root), root);
+});
+
+test('a session outside this repository has no target', () => {
+  const root = repo('stop-typecheck-main-');
+  const other = repo('stop-typecheck-other-');
+  const plain = realpathSync(scratch('stop-typecheck-plain-'));
+  assert.equal(resolveTarget(other, root), null);
+  assert.equal(resolveTarget(plain, root), null);
+  for (const cwd of [7, {}, [], true, null, '']) {
+    assert.equal(resolveTarget(cwd, root), null, `for ${JSON.stringify(cwd)}`);
   }
 });
 
