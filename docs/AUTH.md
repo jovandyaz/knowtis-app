@@ -217,7 +217,7 @@ Three published packages, each with its own README for the exported API:
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | [`@jovandyaz/auth`](../packages/auth/README.md)               | Browser-safe types, errors, password rules; `@jovandyaz/auth/server` adds value objects, `hashToken`, events, expiry constants |
 | [`@jovandyaz/auth-react`](../packages/auth-react/README.md)   | Store, hooks, provider, token storage, `useSessionManager`, Zod schema factories; no HTTP of its own                           |
-| [`@jovandyaz/auth-nestjs`](../packages/auth-nestjs/README.md) | `AuthNestjsModule.register()`, handlers, `JwtStrategy`/`LocalStrategy`, guards, decorators, `AUTH_ERROR_STATUS_MAP`            |
+| [`@jovandyaz/auth-nestjs`](../packages/auth-nestjs/README.md) | `AuthNestjsModule.registerAsync()`, handlers, `JwtStrategy`/`LocalStrategy`, guards, decorators, `AUTH_ERROR_STATUS_MAP`       |
 
 ### How the app connects them
 
@@ -230,7 +230,7 @@ AuthSessionController / AuthAccountController
       ← apps/api/src/modules/auth/infrastructure implements the Ports (Drizzle repos, JwtTokenService, BcryptPasswordHasher)
 ```
 
-`AuthModule` calls `AuthNestjsModule.register()` with the Drizzle repositories, `JwtTokenService`, `BcryptPasswordHasher`, `AuthEmailService` from `@jovandyaz/email-nestjs` (`useExistingEmailService: true`), `TOKEN_HASH_KEY`, the JWT secrets/TTLs and `additionalPublicKeys` derived from `OAUTH_JWKS`. Anonymous sessions (`AnonymousAuthService`) and the cleanup cron live in the app, not in the packages.
+`AuthModule` calls `AuthNestjsModule.registerAsync()` with the Drizzle repositories, `JwtTokenService`, `BcryptPasswordHasher`, `AuthEmailService` from `@jovandyaz/email-nestjs` (`useExistingEmailService: true`), and a factory that reads `TOKEN_HASH_KEY`, the JWT secrets/TTLs and `OAUTH_JWKS` (for `additionalPublicKeys`) from the injected, validated `ConfigService` at boot. Anonymous sessions (`AnonymousAuthService`) and the cleanup cron live in the app, not in the packages.
 
 `JwtAuthGuard` is **not** a global guard. The module provides it and each controller opts in with `@UseGuards(JwtAuthGuard)`, marking open routes `@Public()`. The only `APP_GUARD`s in the API are the throttler (`ThrottlingModule`) and `McpScopeGuard` (`McpModule`).
 
@@ -252,7 +252,7 @@ Frontend (`apps/notes`):
 - **Port interfaces in `auth-nestjs`** — implementations live in the consuming app, not the package.
 - **Two `PasswordHasher` contracts** — `@jovandyaz/auth/server` returns plain promises (utility); `@jovandyaz/auth-nestjs` returns `Result<_, AuthDomainError>` (use-case boundary). Intentionally different.
 - **Optional email ports** — the module boots without `emailService` / token repositories, so a deployment can run without email features.
-- **`tokenHashKey` is a `register()` option, not a port** — every consumer hashes the same way and only the key differs per deployment; the module builds `TokenHasher` from it and fails at construction if the key is not 32 bytes.
+- **`tokenHashKey` is a factory option, not a port** — every consumer hashes the same way and only the key differs per deployment; the module builds `TokenHasher` from it and fails at boot if the key is not 32 bytes.
 
 ---
 

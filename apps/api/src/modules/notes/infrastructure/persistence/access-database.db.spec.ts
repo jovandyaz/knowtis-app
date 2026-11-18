@@ -1,13 +1,14 @@
 import { ConfigService } from '@nestjs/config';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { DB_AVAILABLE } from '../../../../test-support/database';
 import { AccessDatabase } from './access-database';
 
 let pool: AccessDatabase | undefined;
 afterEach(async () => {
   await pool?.onApplicationShutdown();
 });
-describe('dedicated access authority database', () => {
+describe.runIf(DB_AVAILABLE)('dedicated access authority database', () => {
   it('pins statement timeout and primary selection despite URL session overrides, including reconnect', async () => {
     const databaseUrl = process.env['DATABASE_URL'];
     if (!databaseUrl) {

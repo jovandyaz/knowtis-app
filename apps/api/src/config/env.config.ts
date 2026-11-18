@@ -44,8 +44,7 @@ const envSchemaBase = z.object({
     .default('true')
     .transform((v) => v === 'true'),
   // Optional here only so the refinement below can name what is missing; shape
-  // stays TokenHasher's to enforce, since it rejects a malformed key while
-  // AuthModule is still being built, before this schema ever runs.
+  // stays TokenHasher's to enforce, which rejects a malformed key at boot.
   TOKEN_HASH_KEY: z.string().optional(),
   FRONTEND_URL: z.url().default('http://localhost:4200'),
   BACKOFFICE_URL: z.url().optional(),

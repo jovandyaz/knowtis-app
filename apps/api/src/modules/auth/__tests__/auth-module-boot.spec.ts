@@ -12,9 +12,11 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
 import { ok } from 'neverthrow';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { DATABASE_CONNECTION } from '../../../database';
+import { AnonymousAuthService } from '../application/services/anonymous-auth.service';
+import { AuthModule } from '../auth.module';
 
 const TEST_KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
 
@@ -24,8 +26,8 @@ const TEST_KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
  * `ConfigService` classes they inject are different identities than the ones
  * this app provides and Nest never matches the tokens. Only those two
  * cross-package infrastructure boundaries are replaced; the auth graph under
- * test — AuthNestjsModule.register, the handlers, AnonymousAuthService and
- * TOKEN_HASHER — is the real one.
+ * test — AuthNestjsModule.registerAsync, the handlers, AnonymousAuthService
+ * and TOKEN_HASHER — is the real one.
  */
 const stubTokenService = {
   generateTokens: async () => ok({ accessToken: 'at', refreshToken: 'rt' }),
@@ -54,35 +56,17 @@ describe('AuthModule bootstrap', () => {
     JWT_REFRESH_SECRET: 'b'.repeat(40) + '-refresh-secret-x',
     TOKEN_HASH_KEY: TEST_KEY,
   } as const;
-  const priorEnv = new Map<string, string | undefined>();
 
-  beforeAll(() => {
-    // auth.module.ts reads these with getOrThrow at import time, before Nest
-    // boots, so they must land in the environment ahead of the dynamic import.
-    for (const [key, value] of Object.entries(BOOT_ENV)) {
-      priorEnv.set(key, process.env[key]);
-      process.env[key] = value;
-    }
-  });
-
-  afterAll(() => {
-    for (const [key, value] of priorEnv) {
-      if (value === undefined) {
-        Reflect.deleteProperty(process.env, key);
-      } else {
-        process.env[key] = value;
-      }
-    }
-  });
-
-  it('compiles the real module graph with the token hasher wired into AnonymousAuthService', async () => {
-    const { AuthModule } = await import('../auth.module');
-    const { AnonymousAuthService } =
-      await import('../application/services/anonymous-auth.service');
-
-    const moduleRef = await Test.createTestingModule({
+  const compileAuthModule = (env: Record<string, string>) =>
+    Test.createTestingModule({
       imports: [
-        ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+        // A developer's shell or Nx-loaded .env must not fill a missing key.
+        ConfigModule.forRoot({
+          isGlobal: true,
+          ignoreEnvFile: true,
+          skipProcessEnv: true,
+          load: [() => env],
+        }),
         EventEmitterModule.forRoot(),
         StubInfrastructureModule,
         AuthModule,
@@ -91,6 +75,9 @@ describe('AuthModule bootstrap', () => {
       .overrideProvider(TOKEN_SERVICE)
       .useValue(stubTokenService)
       .compile();
+
+  it('compiles the real module graph with the token hasher wired into AnonymousAuthService', async () => {
+    const moduleRef = await compileAuthModule(BOOT_ENV);
 
     expect(moduleRef.get(AnonymousAuthService)).toBeInstanceOf(
       AnonymousAuthService
@@ -106,4 +93,15 @@ describe('AuthModule bootstrap', () => {
 
     await moduleRef.close();
   });
+
+  it.each(['JWT_SECRET', 'JWT_REFRESH_SECRET', 'TOKEN_HASH_KEY'] as const)(
+    'refuses to boot without %s',
+    async (missing) => {
+      const { [missing]: _omitted, ...env } = BOOT_ENV;
+
+      await expect(compileAuthModule(env)).rejects.toThrow(
+        `Configuration key "${missing}" does not exist`
+      );
+    }
+  );
 });

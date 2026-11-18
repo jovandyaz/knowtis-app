@@ -1,10 +1,17 @@
 import {
   Module,
   type DynamicModule,
+  type FactoryProvider,
+  type InjectionToken,
+  type ModuleMetadata,
   type Provider,
   type Type,
 } from '@nestjs/common';
-import { JwtModule, type JwtSignOptions } from '@nestjs/jwt';
+import {
+  JwtModule,
+  type JwtModuleOptions,
+  type JwtSignOptions,
+} from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
 import {
@@ -49,12 +56,20 @@ export interface TokenConfig {
 
 type InjectableClass = Type<any>;
 
-export interface AuthModuleOptions {
+export interface AuthSecretsOptions {
   readonly tokenConfig: TokenConfig;
   /** Server-side secret keying every stored token hash. 32 bytes, base64. */
   readonly tokenHashKey: string;
   readonly passwordSaltRounds?: number;
-  readonly imports?: Array<Type<any> | DynamicModule>;
+}
+
+export interface AuthModuleAsyncOptions {
+  /** Modules the port classes depend on, and the factory's `inject` sources. */
+  readonly imports?: ModuleMetadata['imports'];
+  readonly inject?: Array<InjectionToken>;
+  readonly useFactory: (
+    ...args: never[]
+  ) => AuthSecretsOptions | Promise<AuthSecretsOptions>;
   readonly userRepository: InjectableClass;
   readonly sessionRepository: InjectableClass;
   readonly tokenService: InjectableClass;
@@ -78,13 +93,30 @@ const HANDLERS = [
 ];
 
 @Module({})
+class AuthOptionsModule {}
+
+@Module({})
 export class AuthNestjsModule {
-  static register(options: AuthModuleOptions): DynamicModule {
+  static registerAsync(options: AuthModuleAsyncOptions): DynamicModule {
+    // One shared instance, so JwtModule's factory and this module's providers
+    // read the same resolved options and the consumer's factory runs once.
+    const optionsModule: DynamicModule = {
+      module: AuthOptionsModule,
+      imports: options.imports ?? [],
+      providers: [
+        {
+          provide: AUTH_MODULE_OPTIONS,
+          // The public never[] params cannot widen to Nest's any[] slot unasserted;
+          // Nest passes the resolved `inject` values at runtime.
+          useFactory:
+            options.useFactory as FactoryProvider<AuthSecretsOptions>['useFactory'],
+          inject: options.inject ?? [],
+        },
+      ],
+      exports: [AUTH_MODULE_OPTIONS],
+    };
+
     const providers: Provider[] = [
-      {
-        provide: AUTH_MODULE_OPTIONS,
-        useValue: options,
-      },
       {
         provide: USER_REPOSITORY,
         useClass: options.userRepository,
@@ -103,14 +135,18 @@ export class AuthNestjsModule {
       },
       {
         provide: TOKEN_HASHER,
-        useValue: new TokenHasher(options.tokenHashKey),
+        useFactory: ({ tokenHashKey }: AuthSecretsOptions) =>
+          new TokenHasher(tokenHashKey),
+        inject: [AUTH_MODULE_OPTIONS],
       },
       {
         provide: JWT_VERIFICATION_KEY_SELECTOR,
-        useValue: createJwtVerificationKeySelector(
-          options.tokenConfig.accessTokenSecret,
-          options.tokenConfig.additionalPublicKeys ?? []
-        ),
+        useFactory: ({ tokenConfig }: AuthSecretsOptions) =>
+          createJwtVerificationKeySelector(
+            tokenConfig.accessTokenSecret,
+            tokenConfig.additionalPublicKeys ?? []
+          ),
+        inject: [AUTH_MODULE_OPTIONS],
       },
       VerificationEmailIssuer,
       JwtStrategy,
@@ -149,18 +185,25 @@ export class AuthNestjsModule {
       imports: [
         PassportModule,
         ...(options.imports ?? []),
-        JwtModule.register({
-          secret: options.tokenConfig.accessTokenSecret,
-          signOptions: {
-            algorithm: 'HS256',
-            expiresIn: options.tokenConfig.accessTokenExpiresIn ?? '15m',
-          },
-          verifyOptions: { algorithms: ['HS256'] },
+        optionsModule,
+        JwtModule.registerAsync({
+          imports: [optionsModule],
+          inject: [AUTH_MODULE_OPTIONS],
+          useFactory: ({
+            tokenConfig,
+          }: AuthSecretsOptions): JwtModuleOptions => ({
+            secret: tokenConfig.accessTokenSecret,
+            signOptions: {
+              algorithm: 'HS256',
+              expiresIn: tokenConfig.accessTokenExpiresIn ?? '15m',
+            },
+            verifyOptions: { algorithms: ['HS256'] },
+          }),
         }),
       ],
       providers,
       exports: [
-        AUTH_MODULE_OPTIONS,
+        optionsModule,
         JWT_VERIFICATION_KEY_SELECTOR,
         USER_REPOSITORY,
         SESSION_REPOSITORY,

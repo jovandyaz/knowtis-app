@@ -78,13 +78,15 @@ describe.runIf(DB_AVAILABLE)(
           }),
           AuthorizationModule,
           NotesModule,
-          AuthNestjsModule.register({
+          AuthNestjsModule.registerAsync({
             imports: [UsersModule],
-            tokenConfig: {
-              accessTokenSecret: secret,
-              refreshTokenSecret: secret,
-            },
-            tokenHashKey: Buffer.alloc(32, 9).toString('base64'),
+            useFactory: () => ({
+              tokenConfig: {
+                accessTokenSecret: secret,
+                refreshTokenSecret: secret,
+              },
+              tokenHashKey: Buffer.alloc(32, 9).toString('base64'),
+            }),
             userRepository: DrizzleUserRepository,
             sessionRepository: DrizzleSessionRepository,
             tokenService: JwtTokenService,

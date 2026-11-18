@@ -4,6 +4,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule, type JwtSignOptions } from '@nestjs/jwt';
 
+import type { EnvConfig } from '../../config/env.config';
 import { deriveOauthPublicKeys } from '../../config/oauth-public-keys';
 import { UsersModule } from '../users';
 import { AnonymousAuthService } from './application/services/anonymous-auth.service';
@@ -19,8 +20,6 @@ import { BcryptPasswordHasher } from './infrastructure/security/bcrypt-password-
 import { JwtTokenService } from './infrastructure/security/jwt-token.service';
 import { AuthCleanupTask } from './tasks/auth-cleanup.task';
 
-const configService = new ConfigService();
-
 @Module({
   imports: [
     UsersModule,
@@ -28,24 +27,28 @@ const configService = new ConfigService();
       signOptions: { algorithm: 'HS256' },
       verifyOptions: { algorithms: ['HS256'] },
     }),
-    AuthNestjsModule.register({
+    AuthNestjsModule.registerAsync({
       imports: [UsersModule],
-      tokenConfig: {
-        accessTokenSecret: configService.getOrThrow('JWT_SECRET'),
-        refreshTokenSecret: configService.getOrThrow('JWT_REFRESH_SECRET'),
-        accessTokenExpiresIn: configService.get<JwtSignOptions['expiresIn']>(
-          'JWT_EXPIRES_IN',
-          '15m'
-        ),
-        refreshTokenExpiresIn: configService.get(
-          'JWT_REFRESH_EXPIRES_IN',
-          '7d'
-        ),
-        additionalPublicKeys: deriveOauthPublicKeys(
-          configService.get('OAUTH_JWKS')
-        ),
-      },
-      tokenHashKey: configService.getOrThrow('TOKEN_HASH_KEY'),
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<EnvConfig, true>) => ({
+        tokenConfig: {
+          accessTokenSecret: config.getOrThrow('JWT_SECRET', { infer: true }),
+          refreshTokenSecret: config.getOrThrow('JWT_REFRESH_SECRET', {
+            infer: true,
+          }),
+          accessTokenExpiresIn: config.get<JwtSignOptions['expiresIn']>(
+            'JWT_EXPIRES_IN',
+            '15m'
+          ),
+          refreshTokenExpiresIn: config.get('JWT_REFRESH_EXPIRES_IN', '7d', {
+            infer: true,
+          }),
+          additionalPublicKeys: deriveOauthPublicKeys(
+            config.get('OAUTH_JWKS', { infer: true })
+          ),
+        },
+        tokenHashKey: config.getOrThrow('TOKEN_HASH_KEY', { infer: true }),
+      }),
       userRepository: DrizzleUserRepository,
       sessionRepository: DrizzleSessionRepository,
       tokenService: JwtTokenService,

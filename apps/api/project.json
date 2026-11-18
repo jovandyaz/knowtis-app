@@ -140,7 +140,10 @@
         "^production",
         "{workspaceRoot}/.github/workflows/nightly-eval.yml",
         "{workspaceRoot}/.github/workflows/model-gate.yml",
-        "{workspaceRoot}/.github/workflows/pr-eval.yml"
+        "{workspaceRoot}/.github/workflows/pr-eval.yml",
+        { "env": "CI" },
+        { "env": "DATABASE_URL" },
+        { "env": "REDIS_URL" }
       ],
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {

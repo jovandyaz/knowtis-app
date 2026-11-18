@@ -1,6 +1,10 @@
 // Module
 export { AuthNestjsModule } from './lib/auth.module';
-export type { AuthModuleOptions, TokenConfig } from './lib/auth.module';
+export type {
+  AuthModuleAsyncOptions,
+  AuthSecretsOptions,
+  TokenConfig,
+} from './lib/auth.module';
 export type { OauthPublicKey } from './lib/oauth-public-key';
 export { createJwtVerificationKeySelector } from './lib/jwt-verification-key-selector';
 export type {
