@@ -13,7 +13,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DATABASE_CONNECTION } from '../../database';
 import { ThrottlingModule } from './throttling.module';
 
-const ACCESS_TOKEN_SECRET = new ConfigService().getOrThrow('JWT_SECRET');
+const ACCESS_TOKEN_SECRET = 'fake-access-secret-for-throttling-spec-only';
 const USER_A = '00000000-0000-4000-8000-0000000000a1';
 const USER_B = '00000000-0000-4000-8000-0000000000b2';
 const TTL_MS = 60_000;
@@ -21,7 +21,13 @@ const TTL_MS = 60_000;
 // from the value under test would keep passing wherever that value drifted to.
 const DEFAULT_REQUESTS_PER_WINDOW = 60;
 
-const configService = new ConfigService({ JWT_SECRET: ACCESS_TOKEN_SECRET });
+const AUTH_ENV = {
+  JWT_SECRET: ACCESS_TOKEN_SECRET,
+  JWT_REFRESH_SECRET: 'fake-refresh-secret-for-throttling-spec-only',
+  TOKEN_HASH_KEY: Buffer.alloc(32, 7).toString('base64'),
+};
+
+const configService = new ConfigService(AUTH_ENV);
 
 @Controller('probe')
 class ProbeController {
@@ -117,7 +123,7 @@ describe('ThrottlingModule', () => {
       .overrideProvider(ConfigService)
       .useValue(
         new ConfigService({
-          JWT_SECRET: ACCESS_TOKEN_SECRET,
+          ...AUTH_ENV,
           RATE_LIMITING_ENABLED: true,
           ...env,
         })

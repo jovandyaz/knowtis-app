@@ -16,9 +16,8 @@ describe('AppModule', () => {
   const priorEnv = new Map<string, string | undefined>();
 
   beforeAll(() => {
-    // ConfigModule.forRoot validates the environment, and auth.module.ts reads
-    // its secrets with getOrThrow, both while app.module.ts is still being
-    // imported — so these must land ahead of the dynamic import below.
+    // ConfigModule.forRoot validates the environment while app.module.ts is
+    // still being imported, so these must land ahead of the dynamic import below.
     for (const [key, value] of Object.entries(BOOT_ENV)) {
       priorEnv.set(key, process.env[key]);
       process.env[key] = value;
