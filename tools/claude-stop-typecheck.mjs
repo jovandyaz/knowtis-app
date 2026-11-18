@@ -2,7 +2,7 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const MAX_CONSECUTIVE_BLOCKS = 2;
@@ -84,10 +84,29 @@ export function unusableRun(result) {
   return null;
 }
 
-export function insideWorkspace(cwd, root = WORKSPACE_ROOT) {
-  if (typeof cwd !== 'string') return false;
-  const resolved = resolve(cwd);
-  return resolved === root || resolved.startsWith(root + sep);
+function gitPath(cwd, flag) {
+  const result = spawnSync(
+    'git',
+    ['-C', cwd, 'rev-parse', '--path-format=absolute', flag],
+    {
+      encoding: 'utf8',
+    }
+  );
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+
+/**
+ * The tree to typecheck: the checkout or worktree the session is in, provided it
+ * shares this script's repository. Null means the session is elsewhere.
+ */
+export function resolveTarget(cwd, root = WORKSPACE_ROOT) {
+  if (cwd === undefined) return root;
+  if (typeof cwd !== 'string' || cwd === '') return null;
+  const target = gitPath(cwd, '--show-toplevel');
+  if (!target) return null;
+  const sameRepository =
+    gitPath(target, '--git-common-dir') === gitPath(root, '--git-common-dir');
+  return sameRepository ? target : null;
 }
 
 function main() {
@@ -100,16 +119,17 @@ function main() {
   const { session_id: sessionId, cwd } = readHookInput(stdin);
   const file = statePath(sessionId);
 
-  // The hook runs whichever copy of this script its working directory resolves
-  // to, so a session outside this tree would typecheck the wrong checkout.
-  if (cwd && !insideWorkspace(cwd)) {
+  // CLAUDE_PROJECT_DIR stays on the starting checkout when the session enters a
+  // worktree, so the target comes from the session's cwd, not this file's path.
+  const target = resolveTarget(cwd);
+  if (!target) {
     process.stderr.write(
-      `Stop typecheck skipped: this copy covers ${WORKSPACE_ROOT} but the session is in ${cwd}\n`
+      `Stop typecheck skipped: ${String(cwd)} is not a checkout of ${WORKSPACE_ROOT}'s repository\n`
     );
     process.exit(1);
   }
 
-  const result = runTypecheck();
+  const result = runTypecheck(target);
   const unusable = unusableRun(result);
   if (unusable) {
     process.stderr.write(`Stop typecheck could not run: ${unusable}\n`);
