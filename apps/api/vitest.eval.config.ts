@@ -14,6 +14,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // Evals write and delete rows like the specs, so they get the same test URLs.
+    setupFiles: ['src/test-support/test-env.setup.ts'],
     include: ['src/**/*.eval.ts'],
     testTimeout: 300_000,
     hookTimeout: 60_000,

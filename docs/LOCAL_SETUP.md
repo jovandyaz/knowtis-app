@@ -84,6 +84,8 @@ Without `DATABASE_URL_TEST` the database specs skip, and without `REDIS_URL_TEST
 
 Some Redis specs act server-wide, beyond the db index: pub/sub channels (the Hocuspocus and access-invalidation specs in `apps/api/src/modules/collaboration/`) and `CLIENT PAUSE` (the turn-claim spec) reach a local API on the same Redis server, so stop `pnpm dev:api` before running them, or point `REDIS_URL_TEST` at another Redis.
 
+The vitest evals (`api:eval`, `api:eval-security`, `api:eval-injection-guard`) write and delete rows too, so they use the same two URLs. Without `DATABASE_URL_TEST`, a suite that boots the database fails at startup instead of reaching your dev data.
+
 The sharing probe's six Redis cases stay opt-in: they run only when `SHARING_PROBE_REDIS_URL` points at a separate disposable Redis, as the [protocol probe](SHARING_ACCESS_PROTOCOL.md#protocol-probe) section describes.
 
 ## Design tokens build automatically
