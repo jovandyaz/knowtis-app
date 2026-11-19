@@ -14,6 +14,7 @@ import { conversations } from '../../../database/schema/conversations.schema';
 import { userMemories } from '../../../database/schema/user-memories.schema';
 import { users } from '../../../database/schema/users.schema';
 import { DB_AVAILABLE } from '../../../test-support/database';
+import { REDIS_AVAILABLE } from '../../../test-support/redis';
 import type { MemoryOp } from '../domain/memory-reconcile';
 import type { MemoryTaintReason } from '../domain/memory-taint';
 import { CANARY_HOSTNAME } from '../testing/canary-host';
@@ -32,13 +33,6 @@ import {
   scriptedStructuredOutput,
   type ScriptEntry,
 } from '../testing/scripted-model';
-
-const REDIS_URL = process.env['REDIS_URL']?.trim();
-if (process.env['CI'] && !REDIS_URL) {
-  throw new Error(
-    'REDIS_URL is unset in CI: the compromised memory spec would skip and report green with zero coverage.'
-  );
-}
 
 const OWNER = '00000000-0000-4000-8000-00000000c501';
 const STRANGER = '00000000-0000-4000-8000-00000000c502';
@@ -163,7 +157,7 @@ const TAINTING_TURNS: readonly {
   },
 ];
 
-describe.runIf(DB_AVAILABLE && !!REDIS_URL)(
+describe.runIf(DB_AVAILABLE && REDIS_AVAILABLE)(
   'long-term memory after a compromised turn (G9)',
   { timeout: TIMEOUT_MS },
   () => {
