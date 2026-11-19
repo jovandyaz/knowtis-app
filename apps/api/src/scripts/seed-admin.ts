@@ -1,22 +1,22 @@
 /* eslint-disable no-console */
 import { USER_ROLE } from '@jovandyaz/auth';
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { hash } from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 
+import { validateEnv } from '../config/env.config';
 import { DATABASE_CONNECTION, DatabaseModule } from '../database';
 import type { Database } from '../database';
 import { users } from '../database/schema';
-
-const SALT_ROUNDS = 10;
+import { BcryptPasswordHasher } from '../modules/auth/infrastructure/security/bcrypt-password-hasher';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['apps/api/.env.local', 'apps/api/.env'],
+      validate: validateEnv,
+      envFilePath: ['.env.local', '.env'],
     }),
     DatabaseModule,
   ],
@@ -59,7 +59,13 @@ async function seedAdmin() {
         console.log(`User ${email} promoted to admin.`);
       }
     } else {
-      const passwordHash = await hash(password, SALT_ROUNDS);
+      // tsx emits no decorator metadata, so the hasher is built by hand instead of injected.
+      const hasher = new BcryptPasswordHasher(app.get(ConfigService));
+      const hashed = await hasher.hash(password);
+      if (hashed.isErr()) {
+        throw new Error('Could not hash the admin password.');
+      }
+      const passwordHash = hashed.value;
       await db.insert(users).values({
         email,
         name: email.split('@')[0],
