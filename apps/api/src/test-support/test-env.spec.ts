@@ -30,6 +30,13 @@ describe('resolveTestEnv', () => {
       expect(() => resolveTestEnv({ DATABASE_URL_TEST: url })).toThrow(/_test/)
   );
 
+  it('reports a malformed URL without echoing its password', () => {
+    const run = () =>
+      resolveTestEnv({ DATABASE_URL_TEST: 'postgresql://u:s3cret@[bad' });
+    expect(run).toThrow('DATABASE_URL_TEST is not a valid URL');
+    expect(run).not.toThrow(/s3cret/);
+  });
+
   it('accepts a query string on a _test database', () => {
     expect(
       resolveTestEnv({ DATABASE_URL_TEST: `${TEST}?sslmode=disable` })

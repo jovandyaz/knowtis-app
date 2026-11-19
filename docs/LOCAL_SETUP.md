@@ -82,7 +82,7 @@ It creates the database in the same Postgres if it is missing, then applies the 
 
 Without `DATABASE_URL_TEST` the database specs skip, and without `REDIS_URL_TEST` the Redis specs skip; the run still passes. CI sets both and fails when either is missing, so a skip there never reads as green.
 
-Redis pub/sub ignores the db index. The Hocuspocus and access-invalidation Redis specs in `apps/api/src/modules/collaboration/` share channels with a local API on the same Redis, so stop `pnpm dev:api` before running them, or point `REDIS_URL_TEST` at another Redis.
+Some Redis specs act server-wide, beyond the db index: pub/sub channels (the Hocuspocus and access-invalidation specs in `apps/api/src/modules/collaboration/`) and `CLIENT PAUSE` (the turn-claim spec) reach a local API on the same Redis server, so stop `pnpm dev:api` before running them, or point `REDIS_URL_TEST` at another Redis.
 
 The sharing probe's six Redis cases stay opt-in: they run only when `SHARING_PROBE_REDIS_URL` points at a separate disposable Redis, as the [protocol probe](SHARING_ACCESS_PROTOCOL.md#protocol-probe) section describes.
 

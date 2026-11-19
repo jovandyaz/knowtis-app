@@ -9,7 +9,12 @@ const DATABASE_QUERY_KEYS = ['database', 'dbname'];
 const read = (env: Env, key: string): string => env[key]?.trim() ?? '';
 
 function assertTestDatabase(raw: string): void {
-  const url = new URL(raw);
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error('DATABASE_URL_TEST is not a valid URL.');
+  }
   if (!POSTGRES_PROTOCOLS.has(url.protocol)) {
     throw new Error(
       'DATABASE_URL_TEST must be a postgres:// or postgresql:// URL naming a database that ends in _test.'

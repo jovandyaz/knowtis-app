@@ -16,7 +16,7 @@ Run tasks through `pnpm nx`; pnpm is the only package manager.
 
 - `pnpm run setup` bootstraps a checkout; `run` is required because `setup` is a pnpm built-in.
 - Apply schema changes with `pnpm db:migrate:run`. Never run `pnpm db:push` against a shared database: it is `drizzle-kit push --force`.
-- `apps/api` specs only use `DATABASE_URL_TEST` and `REDIS_URL_TEST`, never the dev database or Redis; run `pnpm db:test:prepare` once to create and migrate `knowtis_test`. The sharing probe's Redis cases stay opt-in via `SHARING_PROBE_REDIS_URL`.
+- `apps/api` specs only use `DATABASE_URL_TEST` and `REDIS_URL_TEST`, never the dev database, and use a separate Redis database index on the same server unless `REDIS_URL_TEST` points elsewhere; run `pnpm db:test:prepare` once to create and migrate `knowtis_test`. The sharing probe's Redis cases stay opt-in via `SHARING_PROBE_REDIS_URL`.
 - "Waiting for <project>:serve in another nx process" with the port free means an orphaned `nx serve` holds the task lock: run `pnpm dev:stop`.
 - AI features need `OPENROUTER_API_KEY` in `apps/api/.env` and the `ai_enabled` flag on in the DB (it has no seeded row, and a missing flag reads off). BYOK also needs `BYOK_ENCRYPTION_KEY` (32 bytes, base64) and has no flag of its own.
 
