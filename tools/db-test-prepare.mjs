@@ -54,13 +54,22 @@ function parseTestUrl(raw) {
     fail('DATABASE_URL_TEST must be a postgres:// or postgresql:// URL.');
   }
   const name = url.pathname.slice(1);
-  const wrong = [
+  const candidates = [
     name,
     ...DATABASE_QUERY_KEYS.flatMap((key) => url.searchParams.getAll(key)),
-  ].find((candidate) => !TEST_DATABASE_NAME.test(candidate));
+  ];
+  const wrong = candidates.find(
+    (candidate) => !TEST_DATABASE_NAME.test(candidate)
+  );
   if (wrong !== undefined) {
     fail(
       `DATABASE_URL_TEST names database "${wrong}": it must match ${TEST_DATABASE_NAME} so the dev database is never touched.`
+    );
+  }
+  // Creation uses the path name but the migrator honours the query override, so they must agree.
+  if (new Set(candidates).size > 1) {
+    fail(
+      `DATABASE_URL_TEST names more than one database (${[...new Set(candidates)].join(', ')}): keep only the path name.`
     );
   }
   return { url, name };
