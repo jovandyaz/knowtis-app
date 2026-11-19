@@ -44,20 +44,28 @@ describe('resolveTestEnv', () => {
     ).toBe(`${TEST}?database=other_test`);
   });
 
-  it('maps REDIS_URL_TEST onto REDIS_URL and SHARING_PROBE_REDIS_URL', () => {
-    const env = resolveTestEnv({
-      REDIS_URL: 'redis://localhost:6379',
-      REDIS_URL_TEST: 'redis://localhost:6379/15',
-    });
-    expect([env.REDIS_URL, env.SHARING_PROBE_REDIS_URL]).toEqual([
-      'redis://localhost:6379/15',
-      'redis://localhost:6379/15',
-    ]);
+  it('maps REDIS_URL_TEST onto REDIS_URL', () => {
+    expect(
+      resolveTestEnv({
+        REDIS_URL: 'redis://localhost:6379',
+        REDIS_URL_TEST: 'redis://localhost:6379/15',
+      }).REDIS_URL
+    ).toBe('redis://localhost:6379/15');
   });
 
-  it('blanks both Redis URLs when REDIS_URL_TEST is unset', () => {
-    const env = resolveTestEnv({ REDIS_URL: 'redis://localhost:6379' });
-    expect([env.REDIS_URL, env.SHARING_PROBE_REDIS_URL]).toEqual(['', '']);
+  it('blanks REDIS_URL when REDIS_URL_TEST is unset', () => {
+    expect(
+      resolveTestEnv({ REDIS_URL: 'redis://localhost:6379' }).REDIS_URL
+    ).toBe('');
+  });
+
+  it('leaves SHARING_PROBE_REDIS_URL to an explicit opt-in', () => {
+    const env = resolveTestEnv({
+      DATABASE_URL_TEST: TEST,
+      REDIS_URL_TEST: 'redis://localhost:6379/15',
+      SHARING_PROBE_REDIS_URL: 'redis://localhost:6380',
+    });
+    expect(env).not.toHaveProperty('SHARING_PROBE_REDIS_URL');
   });
 
   it('fails in CI without DATABASE_URL_TEST', () => {

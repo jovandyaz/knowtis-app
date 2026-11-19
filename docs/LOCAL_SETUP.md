@@ -84,6 +84,8 @@ Without `DATABASE_URL_TEST` the database specs skip, and without `REDIS_URL_TEST
 
 Redis pub/sub ignores the db index. The Hocuspocus and access-invalidation Redis specs in `apps/api/src/modules/collaboration/` share channels with a local API on the same Redis, so stop `pnpm dev:api` before running them, or point `REDIS_URL_TEST` at another Redis.
 
+The sharing probe's six Redis cases stay opt-in: they run only when `SHARING_PROBE_REDIS_URL` points at a separate disposable Redis, as the [protocol probe](SHARING_ACCESS_PROTOCOL.md#protocol-probe) section describes.
+
 ## Design tokens build automatically
 
 The design system generates its CSS variables (`packages/design-system/build/css/variables.css`) from token JSON via Style Dictionary. That `build/` directory is **git-ignored**, so a fresh clone doesn't have it. `apps/notes/src/index.css` (and `apps/backoffice/src/index.css`) import `@knowtis/design-system/styles.css`, which in turn imports `build/css/variables.css` — a missing file crashes the Vite dev server with:

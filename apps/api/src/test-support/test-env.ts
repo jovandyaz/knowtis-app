@@ -38,7 +38,6 @@ function assertSetInCi(value: string, key: string, kind: string): void {
 export function resolveTestEnv(env: Env): {
   DATABASE_URL: string;
   REDIS_URL: string;
-  SHARING_PROBE_REDIS_URL: string;
 } {
   const databaseUrl = read(env, 'DATABASE_URL_TEST');
   const redisUrl = read(env, 'REDIS_URL_TEST');
@@ -51,9 +50,5 @@ export function resolveTestEnv(env: Env): {
     assertSetInCi(redisUrl, 'REDIS_URL_TEST', 'redis-backed');
   }
 
-  return {
-    DATABASE_URL: databaseUrl,
-    REDIS_URL: redisUrl,
-    SHARING_PROBE_REDIS_URL: redisUrl,
-  };
+  return { DATABASE_URL: databaseUrl, REDIS_URL: redisUrl };
 }
