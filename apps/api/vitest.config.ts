@@ -6,6 +6,7 @@ import swc from 'unplugin-swc';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 const DB_SPECS = 'src/**/*.db.spec.ts';
+const TEST_ENV_SETUP = 'src/test-support/test-env.setup.ts';
 
 /** Fresh instances per project: inline projects inherit no plugins from the root config, and path aliases and decorators break silently without these. */
 const plugins = () => [
@@ -45,6 +46,7 @@ export default defineConfig({
           name: 'unit',
           globals: true,
           environment: 'node',
+          setupFiles: [TEST_ENV_SETUP],
           include: ['src/**/*.{test,spec}.ts'],
           exclude: [...configDefaults.exclude, DB_SPECS],
           // Required: vitest refuses to group two projects together when their
@@ -67,6 +69,7 @@ export default defineConfig({
           name: 'database',
           globals: true,
           environment: 'node',
+          setupFiles: [TEST_ENV_SETUP],
           include: [DB_SPECS],
           fileParallelism: false,
           // These already run one at a time, so sharing the worker's module

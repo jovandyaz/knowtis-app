@@ -147,8 +147,8 @@ fixture: the lost-publication case then fails its 5-second removal wait.
 Normal acceptance must run without `SHARING_ACCESS_NEGATIVE_CONTROL`.
 
 ```sh
-DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:PORT/DISPOSABLE_DATABASE \
-REDIS_URL=redis://127.0.0.1:REDIS_PORT \
+DATABASE_URL_TEST=postgresql://USER:PASSWORD@127.0.0.1:PORT/knowtis_test \
+REDIS_URL_TEST=redis://127.0.0.1:REDIS_PORT/15 \
 NX_DAEMON=false NX_ISOLATE_PLUGINS=false NX_PARALLEL=1 VITEST_MAX_WORKERS=2 \
 pnpm nx test api \
   --testFile=src/modules/collaboration/access-revalidation.redis.db.spec.ts \
@@ -156,8 +156,10 @@ pnpm nx test api \
 ```
 
 The file ends in `.db.spec.ts` so Nx/Vitest routes it into the sequential database
-project. Missing database or Redis URLs fail the acceptance suite rather than
-silently skipping its cases. CI provisions both services. No migrations change.
+project. The specs use only `DATABASE_URL_TEST`, whose database name must end in
+`_test`, and `REDIS_URL_TEST` ([test database](LOCAL_SETUP.md#test-database)).
+Without them the cases skip locally; CI fails instead of skipping and provisions
+both services. No migrations change.
 
 ## Limits
 
@@ -198,7 +200,7 @@ separate disposable Redis instance whose URL is plain `redis://HOST:PORT`,
 without credentials or a database path.
 
 ```sh
-DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:PORT/TEST_DATABASE \
+DATABASE_URL_TEST=postgresql://USER:PASSWORD@127.0.0.1:PORT/knowtis_test \
 SHARING_PROBE_REDIS_URL=redis://127.0.0.1:REDIS_PORT \
 NX_DAEMON=false NX_ISOLATE_PLUGINS=false \
 pnpm nx test api \
@@ -206,11 +208,13 @@ pnpm nx test api \
   --run --skip-nx-cache
 ```
 
-CI runs this file in the sequential database project but sets only `REDIS_URL`,
-so its six Redis cases skip explicitly there. A CI pass alone therefore does not
-establish the complete distributed proof; all 16 cases must run before relying
-on it. Providers, Y.Docs, servers, subscriptions, timers and database clients
-close during teardown; disposable external services stay owned by the runner.
+`SHARING_PROBE_REDIS_URL` is an explicit opt-in: no env file sets it and the test
+setup never fills it from another variable, so locally the six Redis cases skip
+without it. CI sets it to its disposable Redis service, so all 16 cases run
+there. A local pass without it does not establish the complete distributed
+proof; all 16 cases must run before relying on it. Providers, Y.Docs, servers,
+subscriptions, timers and database clients close during teardown; disposable
+external services stay owned by the runner.
 
 The probe reaches unavailable authority through a real SQL error and read
 timeout, not a killed database container or a production TCP partition. Its

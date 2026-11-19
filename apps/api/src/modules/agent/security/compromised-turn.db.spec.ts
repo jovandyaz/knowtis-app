@@ -18,6 +18,7 @@ import {
 import { notePermissions, notes } from '../../../database/schema/notes.schema';
 import { users } from '../../../database/schema/users.schema';
 import { DB_AVAILABLE } from '../../../test-support/database';
+import { REDIS_AVAILABLE } from '../../../test-support/redis';
 import type { RunAgentTurnCallbacks } from '../application/run-agent-turn.handler';
 import { AgentErrors } from '../domain/agent-errors';
 import { PROPOSAL_TOOL_NAMES } from '../infrastructure/tools/note-mutate.tool-group';
@@ -46,13 +47,6 @@ import {
   refusedFetchOf,
   toolOutputsNamed,
 } from '../testing/tool-results';
-
-const REDIS_URL = process.env['REDIS_URL']?.trim();
-if (process.env['CI'] && !REDIS_URL) {
-  throw new Error(
-    'REDIS_URL is unset in CI: the compromised turn spec would skip and report green with zero coverage.'
-  );
-}
 
 const VICTIM = '00000000-0000-4000-8000-00000000c401';
 const ATTACKER = '00000000-0000-4000-8000-00000000c402';
@@ -163,7 +157,7 @@ function collectingCallbacks() {
   return { seen, callbacks };
 }
 
-describe.runIf(DB_AVAILABLE && !!REDIS_URL)(
+describe.runIf(DB_AVAILABLE && REDIS_AVAILABLE)(
   'a compromised model on the real turn, approval and resume path',
   { timeout: TIMEOUT_MS },
   () => {

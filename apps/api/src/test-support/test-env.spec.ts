@@ -1,0 +1,93 @@
+import { describe, expect, it } from 'vitest';
+
+import { resolveTestEnv } from './test-env';
+
+const DEV = 'postgresql://knowtis:pw@localhost:5432/knowtis';
+const TEST = 'postgresql://knowtis:pw@localhost:5432/knowtis_test';
+
+describe('resolveTestEnv', () => {
+  it('routes specs to DATABASE_URL_TEST', () => {
+    expect(
+      resolveTestEnv({ DATABASE_URL: DEV, DATABASE_URL_TEST: TEST })
+        .DATABASE_URL
+    ).toBe(TEST);
+  });
+
+  it('blanks DATABASE_URL when no test URL is set, so the dev database is unreachable', () => {
+    expect(resolveTestEnv({ DATABASE_URL: DEV }).DATABASE_URL).toBe('');
+  });
+
+  it.each([
+    DEV,
+    `${DEV}?sslmode=disable`,
+    'postgresql://u:p@h:5432/knowtis_test_copy',
+    `${TEST}?database=knowtis`,
+    `${TEST}?dbname=knowtis`,
+    'knowtis:pw@localhost:5432/knowtis_test',
+  ])(
+    'refuses a test URL whose database name does not end in _test: %s',
+    (url) =>
+      expect(() => resolveTestEnv({ DATABASE_URL_TEST: url })).toThrow(/_test/)
+  );
+
+  it('reports a malformed URL without echoing its password', () => {
+    const run = () =>
+      resolveTestEnv({ DATABASE_URL_TEST: 'postgresql://u:s3cret@[bad' });
+    expect(run).toThrow('DATABASE_URL_TEST is not a valid URL');
+    expect(run).not.toThrow(/s3cret/);
+  });
+
+  it('accepts a query string on a _test database', () => {
+    expect(
+      resolveTestEnv({ DATABASE_URL_TEST: `${TEST}?sslmode=disable` })
+        .DATABASE_URL
+    ).toBe(`${TEST}?sslmode=disable`);
+  });
+
+  it('accepts a database query param that also ends in _test', () => {
+    expect(
+      resolveTestEnv({ DATABASE_URL_TEST: `${TEST}?database=other_test` })
+        .DATABASE_URL
+    ).toBe(`${TEST}?database=other_test`);
+  });
+
+  it('maps REDIS_URL_TEST onto REDIS_URL', () => {
+    expect(
+      resolveTestEnv({
+        REDIS_URL: 'redis://localhost:6379',
+        REDIS_URL_TEST: 'redis://localhost:6379/15',
+      }).REDIS_URL
+    ).toBe('redis://localhost:6379/15');
+  });
+
+  it('blanks REDIS_URL when REDIS_URL_TEST is unset', () => {
+    expect(
+      resolveTestEnv({ REDIS_URL: 'redis://localhost:6379' }).REDIS_URL
+    ).toBe('');
+  });
+
+  it('leaves SHARING_PROBE_REDIS_URL to an explicit opt-in', () => {
+    const env = resolveTestEnv({
+      DATABASE_URL_TEST: TEST,
+      REDIS_URL_TEST: 'redis://localhost:6379/15',
+      SHARING_PROBE_REDIS_URL: 'redis://localhost:6380',
+    });
+    expect(env).not.toHaveProperty('SHARING_PROBE_REDIS_URL');
+  });
+
+  it('fails in CI without DATABASE_URL_TEST', () => {
+    expect(() =>
+      resolveTestEnv({ CI: 'true', REDIS_URL_TEST: 'redis://x:6379/15' })
+    ).toThrow('DATABASE_URL_TEST is unset in CI');
+  });
+
+  it('fails in CI without REDIS_URL_TEST', () => {
+    expect(() =>
+      resolveTestEnv({ CI: 'true', DATABASE_URL_TEST: TEST })
+    ).toThrow('REDIS_URL_TEST is unset in CI');
+  });
+
+  it('treats whitespace-only values as unset', () => {
+    expect(resolveTestEnv({ DATABASE_URL_TEST: '  ' }).DATABASE_URL).toBe('');
+  });
+});

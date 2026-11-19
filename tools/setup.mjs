@@ -100,6 +100,9 @@ waitForPostgres();
 step('Applying database migrations');
 run('pnpm', ['db:migrate:run']);
 
+step('Preparing the test database');
+run('pnpm', ['db:test:prepare', '--skip-if-unset']);
+
 process.stdout.write(`
 ✓ Setup complete. Next:
     pnpm dev:all       # start API + Notes + Backoffice

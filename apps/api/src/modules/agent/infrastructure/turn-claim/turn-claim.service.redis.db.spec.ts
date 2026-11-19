@@ -13,18 +13,12 @@ import {
   vi,
 } from 'vitest';
 
-import '../../../../test-support/database';
-
 import type { EnvConfig } from '../../../../config/env.config';
+import { REDIS_AVAILABLE } from '../../../../test-support/redis';
 import type { AIRedisProvider } from '../../../ai/infrastructure/redis/ai-redis.provider';
 import { TurnClaimService, type TurnClaimRequest } from './turn-claim.service';
 
 const REDIS_URL = process.env['REDIS_URL']?.trim();
-if (process.env['CI'] && !REDIS_URL) {
-  throw new Error(
-    'REDIS_URL is unset in CI: the turn claim Redis spec would skip and report green with zero coverage.'
-  );
-}
 
 const AGENT_MAX_MS = 300_000;
 const RUNNING_LEASE_SECONDS = 360;
@@ -35,7 +29,7 @@ const WRITE_PAUSE_CAP_MS = 5_000;
 const OWNER = 'delivery-1';
 const LATER_OWNER = 'delivery-2';
 
-describe.runIf(!!REDIS_URL)('TurnClaimService against Redis', () => {
+describe.runIf(REDIS_AVAILABLE)('TurnClaimService against Redis', () => {
   let redis: Redis;
   let claims: TurnClaimService;
   const keysInUse: string[] = [];
