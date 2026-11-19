@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 
 import { validateEnv } from '../config/env.config';
@@ -23,13 +23,16 @@ class ScriptContextModule {}
 
 /** Runs `work` against the database the validated api env names, closing the connection afterwards. */
 export async function withScriptDatabase<T>(
-  work: (db: Database) => Promise<T>
+  work: (db: Database, config: ConfigService) => Promise<T>
 ): Promise<T> {
   const app = await NestFactory.createApplicationContext(ScriptContextModule, {
     logger: ['error', 'warn'],
   });
   try {
-    return await work(app.get<Database>(DATABASE_CONNECTION));
+    return await work(
+      app.get<Database>(DATABASE_CONNECTION),
+      app.get(ConfigService)
+    );
   } finally {
     await app.close();
   }
