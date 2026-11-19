@@ -13,6 +13,8 @@ const POSTGRES_PROTOCOLS = new Set(['postgres:', 'postgresql:']);
 // Mirrors apps/api/src/test-support/test-env.ts: postgres.js and libpq let
 // these query keys override the database named in the path.
 const DATABASE_QUERY_KEYS = ['database', 'dbname'];
+// Passed by `pnpm run setup`: scaffoldEnv never rewrites an older .env that lacks the variable.
+const SKIP_IF_UNSET = process.argv.includes('--skip-if-unset');
 
 function fail(message) {
   process.stderr.write(`\n✗ ${message}\n`);
@@ -27,6 +29,12 @@ function readTestUrl() {
     quiet: true,
   });
   const raw = env['DATABASE_URL_TEST']?.trim();
+  if (!raw && SKIP_IF_UNSET) {
+    process.stdout.write(
+      '· Skipped: DATABASE_URL_TEST is unset. Copy DATABASE_URL_TEST and REDIS_URL_TEST from apps/api/.env.example into apps/api/.env, then run pnpm db:test:prepare.\n'
+    );
+    process.exit(0);
+  }
   if (!raw) {
     fail(
       'DATABASE_URL_TEST is not set in apps/api/.env.local or apps/api/.env. Copy it from apps/api/.env.example.'

@@ -40,7 +40,7 @@ Runs [`tools/setup.mjs`](../tools/setup.mjs) in order, aborting on the first fai
 5. `pnpm docker:up` — Postgres (pgvector/pg16) + Redis.
 6. Wait for Postgres to accept connections.
 7. `pnpm db:migrate:run` — apply the Drizzle migrations (schema and seeds) to the local DB.
-8. `pnpm db:test:prepare` — create and migrate the [test database](#test-database).
+8. `pnpm db:test:prepare` — create and migrate the [test database](#test-database); skipped with a notice when an older `apps/api/.env` lacks `DATABASE_URL_TEST`.
 
 > If you previously created your local DB with `pnpm db:push`, run `pnpm db:baseline` once before `pnpm db:migrate:run` so the existing migrations are marked as applied. See [MIGRATIONS.md](./MIGRATIONS.md).
 
