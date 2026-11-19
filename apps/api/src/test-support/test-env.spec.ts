@@ -21,6 +21,9 @@ describe('resolveTestEnv', () => {
     DEV,
     `${DEV}?sslmode=disable`,
     'postgresql://u:p@h:5432/knowtis_test_copy',
+    `${TEST}?database=knowtis`,
+    `${TEST}?dbname=knowtis`,
+    'knowtis:pw@localhost:5432/knowtis_test',
   ])(
     'refuses a test URL whose database name does not end in _test: %s',
     (url) =>
@@ -32,6 +35,13 @@ describe('resolveTestEnv', () => {
       resolveTestEnv({ DATABASE_URL_TEST: `${TEST}?sslmode=disable` })
         .DATABASE_URL
     ).toBe(`${TEST}?sslmode=disable`);
+  });
+
+  it('accepts a database query param that also ends in _test', () => {
+    expect(
+      resolveTestEnv({ DATABASE_URL_TEST: `${TEST}?database=other_test` })
+        .DATABASE_URL
+    ).toBe(`${TEST}?database=other_test`);
   });
 
   it('maps REDIS_URL_TEST onto REDIS_URL and SHARING_PROBE_REDIS_URL', () => {
