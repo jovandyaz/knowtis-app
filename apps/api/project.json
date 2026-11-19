@@ -142,8 +142,8 @@
         "{workspaceRoot}/.github/workflows/model-gate.yml",
         "{workspaceRoot}/.github/workflows/pr-eval.yml",
         { "env": "CI" },
-        { "env": "DATABASE_URL" },
-        { "env": "REDIS_URL" }
+        { "env": "DATABASE_URL_TEST" },
+        { "env": "REDIS_URL_TEST" }
       ],
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {

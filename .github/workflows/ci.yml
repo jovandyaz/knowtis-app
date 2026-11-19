@@ -54,6 +54,8 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379
       SHARING_PROBE_REDIS_URL: redis://127.0.0.1:6379
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/knowtis_test
+      DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/knowtis_test
+      REDIS_URL_TEST: redis://127.0.0.1:6379/15
       # Throwaway values: specs validate env shape only, they never issue real tokens.
       JWT_SECRET: ci-jwt-secret-0000000000000000000000
       JWT_REFRESH_SECRET: ci-jwt-refresh-secret-1111111111111111

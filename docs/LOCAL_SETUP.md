@@ -40,6 +40,7 @@ Runs [`tools/setup.mjs`](../tools/setup.mjs) in order, aborting on the first fai
 5. `pnpm docker:up` — Postgres (pgvector/pg16) + Redis.
 6. Wait for Postgres to accept connections.
 7. `pnpm db:migrate:run` — apply the Drizzle migrations (schema and seeds) to the local DB.
+8. `pnpm db:test:prepare` — create and migrate the [test database](#test-database).
 
 > If you previously created your local DB with `pnpm db:push`, run `pnpm db:baseline` once before `pnpm db:migrate:run` so the existing migrations are marked as applied. See [MIGRATIONS.md](./MIGRATIONS.md).
 
@@ -59,6 +60,29 @@ Runs [`tools/setup.mjs`](../tools/setup.mjs) in order, aborting on the first fai
 | Storybook          | <http://localhost:6006>               | `pnpm storybook`      |
 | PostgreSQL         | localhost:5432                        | `pnpm docker:up`      |
 | Redis              | localhost:6379                        | `pnpm docker:up`      |
+
+## Test database
+
+The `apps/api` specs create and delete rows, so they run against their own database and never against your dev data. They read only two variables from `apps/api/.env` (or `.env.local`). The test setup copies them over `DATABASE_URL` and `REDIS_URL`, or blanks those when they are unset, so the dev URLs never reach a spec.
+
+```bash
+DATABASE_URL_TEST=postgresql://knowtis:knowtis_dev@localhost:5432/knowtis_test
+REDIS_URL_TEST=redis://localhost:6379/15
+```
+
+Both are in `apps/api/.env.example`; copy them if your `.env` is older. The database name must end in `_test`, or the run aborts.
+
+Create and migrate `knowtis_test`, once and again after pulling new migrations:
+
+```bash
+pnpm db:test:prepare
+```
+
+It creates the database in the same Postgres if it is missing, then applies the migrations. Re-running it is safe. `pnpm run setup` runs it for you.
+
+Without `DATABASE_URL_TEST` the database specs skip, and without `REDIS_URL_TEST` the Redis specs skip; the run still passes. CI sets both and fails when either is missing, so a skip there never reads as green.
+
+Redis pub/sub ignores the db index. The Hocuspocus and access-invalidation Redis specs in `apps/api/src/modules/collaboration/` share channels with a local API on the same Redis, so stop `pnpm dev:api` before running them, or point `REDIS_URL_TEST` at another Redis.
 
 ## Design tokens build automatically
 
