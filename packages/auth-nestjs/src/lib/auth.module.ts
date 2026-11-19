@@ -60,7 +60,6 @@ export interface AuthSecretsOptions {
   readonly tokenConfig: TokenConfig;
   /** Server-side secret keying every stored token hash. 32 bytes, base64. */
   readonly tokenHashKey: string;
-  readonly passwordSaltRounds?: number;
 }
 
 export interface AuthModuleAsyncOptions {
