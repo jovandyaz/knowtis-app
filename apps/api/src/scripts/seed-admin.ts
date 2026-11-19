@@ -63,7 +63,9 @@ async function seedAdmin() {
       const hasher = new BcryptPasswordHasher(app.get(ConfigService));
       const hashed = await hasher.hash(password);
       if (hashed.isErr()) {
-        throw new Error('Could not hash the admin password.');
+        throw new Error('Could not hash the admin password.', {
+          cause: hashed.error,
+        });
       }
       const passwordHash = hashed.value;
       await db.insert(users).values({
