@@ -10,6 +10,7 @@ export const ArtifactErrorCodes = {
   GENERATION_FAILED: 'GENERATION_FAILED',
   EMPTY_CONTENT: 'EMPTY_CONTENT',
   CONTENT_TOO_LARGE: 'CONTENT_TOO_LARGE',
+  PROMPT_INJECTION_DETECTED: 'PROMPT_INJECTION_DETECTED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   INVALID_QUIZ_SCOPE: 'INVALID_QUIZ_SCOPE',
   INVALID_QUIZ_ANSWER: 'INVALID_QUIZ_ANSWER',
@@ -52,6 +53,12 @@ export const ArtifactErrors = {
     createArtifactError(
       ArtifactErrorCodes.CONTENT_TOO_LARGE,
       `Note content is too large to generate an artifact (max ${maxChars} characters). Split the note into smaller ones and try again.`
+    ),
+
+  promptInjectionDetected: () =>
+    createArtifactError(
+      ArtifactErrorCodes.PROMPT_INJECTION_DETECTED,
+      'Cannot generate artifact: the note contains text that reads like instructions to the AI. Remove it and try again.'
     ),
 
   generationFailed: (reason: string) =>

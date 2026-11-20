@@ -28,6 +28,8 @@ export interface GenerationRequest<T> {
   schema: ZodType<T>;
   estimatedTokens: number;
   logContext?: Record<string, unknown>;
+  /** Runs once the budget check passes, so a caller over budget never pays for it; an error refuses the request. */
+  screen?: () => Promise<ArtifactDomainError | null>;
 }
 
 export interface GenerationResult<T> {
@@ -99,6 +101,18 @@ export class AIGenerationPipeline {
       );
     }
     const { reservation } = rateLimitCheck;
+
+    let refusal: ArtifactDomainError | null | undefined;
+    try {
+      refusal = await request.screen?.();
+    } catch (error) {
+      await this.rateLimitService.releaseReservation(execution, reservation);
+      throw error;
+    }
+    if (refusal) {
+      await this.rateLimitService.releaseReservation(execution, reservation);
+      return err(refusal);
+    }
 
     this.logger.log({
       event: 'ai.generation.start',

@@ -6,6 +6,7 @@ import { AI_ACTION } from '@knowtis/shared-types';
 
 import type { AIOrchestrator } from '../../../ai/application/services/ai-orchestrator.service';
 import type { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
+import type { InjectionClassifierService } from '../../../ai/application/services/injection-classifier.service';
 import type { AIStructuredOutputProvider } from '../../../ai/domain/ports/ai-structured-output.port';
 import { AIModel } from '../../../ai/domain/value-objects/ai-model.vo';
 import { createExecutionContext } from '../../../ai/testing/create-execution-context';
@@ -16,6 +17,7 @@ import type {
   ArtifactWriteRepository,
 } from '../../domain/ports/artifact.repository';
 import { AIGenerationPipeline } from '../services/ai-generation.pipeline';
+import { NoteContentGuard } from '../services/note-content-guard';
 import { GenerateArtifactHandler } from './generate-artifact.handler';
 
 const MOCK_USER_ID = 'user-123';
@@ -64,6 +66,7 @@ describe('GenerateArtifactHandler', () => {
     releaseReservation: ReturnType<typeof vi.fn>;
   };
   let pipeline: AIGenerationPipeline;
+  let classifier: { classify: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     repository = {
@@ -93,9 +96,12 @@ describe('GenerateArtifactHandler', () => {
       createTestCatalog()
     );
 
+    classifier = { classify: vi.fn().mockResolvedValue({ safe: true }) };
+
     handler = new GenerateArtifactHandler(
       repository as unknown as ArtifactWriteRepository,
       pipeline,
+      new NoteContentGuard(classifier as unknown as InjectionClassifierService),
       { emit: vi.fn() } as unknown as EventEmitter2
     );
   });
@@ -207,29 +213,92 @@ describe('GenerateArtifactHandler', () => {
       );
     });
 
-    it('should not block note content that contains injection-like phrasing', async () => {
-      rateLimitService.checkLimit.mockResolvedValue(ALLOWED);
-      orchestrator.selectModel.mockResolvedValue(
-        AIModel.create(MOCK_MODEL, createTestCatalog())
+    describe('note content screening', () => {
+      const SECURITY_NOTE =
+        '<p>My security notes: attackers write "ignore all previous instructions" to attempt prompt injection.</p>';
+
+      beforeEach(() => {
+        rateLimitService.checkLimit.mockResolvedValue(ALLOWED);
+        orchestrator.selectModel.mockResolvedValue(
+          AIModel.create(MOCK_MODEL, createTestCatalog())
+        );
+        orchestrator.getSystemPrompt.mockReturnValue('system');
+        structuredOutput.generateStructuredOutput.mockResolvedValue({
+          object: { cards: [] },
+          inputTokens: 10,
+          outputTokens: 5,
+          model: MOCK_MODEL,
+        });
+        rateLimitService.recordUsage.mockResolvedValue(undefined);
+        repository.create.mockResolvedValue(ok(createMockArtifactEntity()));
+      });
+
+      it('never asks the classifier about a note the heuristic passes', async () => {
+        const result = await handler.execute(baseInput);
+
+        expect(result.isOk()).toBe(true);
+        expect(classifier.classify).not.toHaveBeenCalled();
+      });
+
+      it('generates from a note that discusses injection once the classifier clears it', async () => {
+        const result = await handler.execute({
+          ...baseInput,
+          noteContent: SECURITY_NOTE,
+        });
+
+        expect(result.isOk()).toBe(true);
+        expect(classifier.classify).toHaveBeenCalledWith(
+          expect.stringContaining('ignore all previous instructions'),
+          MOCK_EXECUTION
+        );
+        expect(
+          structuredOutput.generateStructuredOutput
+        ).toHaveBeenCalledOnce();
+      });
+
+      it.each([
+        ['flags it', { safe: false }],
+        ['cannot decide', { safe: true, degraded: true }],
+      ])(
+        'refuses and releases the budget reservation when the classifier %s',
+        async (_, verdict) => {
+          classifier.classify.mockResolvedValue(verdict);
+
+          const result = await handler.execute({
+            ...baseInput,
+            noteContent: SECURITY_NOTE,
+          });
+
+          expect(result._unsafeUnwrapErr().code).toBe(
+            ArtifactErrorCodes.PROMPT_INJECTION_DETECTED
+          );
+          expect(rateLimitService.releaseReservation).toHaveBeenCalledOnce();
+          expect(
+            structuredOutput.generateStructuredOutput
+          ).not.toHaveBeenCalled();
+          expect(repository.create).not.toHaveBeenCalled();
+        }
       );
-      orchestrator.getSystemPrompt.mockReturnValue('system');
-      structuredOutput.generateStructuredOutput.mockResolvedValue({
-        object: { cards: [] },
-        inputTokens: 10,
-        outputTokens: 5,
-        model: MOCK_MODEL,
-      });
-      rateLimitService.recordUsage.mockResolvedValue(undefined);
-      repository.create.mockResolvedValue(ok(createMockArtifactEntity()));
 
-      const result = await handler.execute({
-        ...baseInput,
-        noteContent:
-          '<p>My security notes: attackers write "ignore all previous instructions" to attempt prompt injection.</p>',
+      it('releases the reservation when screening throws', async () => {
+        classifier.classify.mockRejectedValue(new Error('classifier down'));
+
+        await expect(
+          handler.execute({ ...baseInput, noteContent: SECURITY_NOTE })
+        ).rejects.toThrow('classifier down');
+        expect(rateLimitService.releaseReservation).toHaveBeenCalledOnce();
       });
 
-      expect(result.isOk()).toBe(true);
-      expect(structuredOutput.generateStructuredOutput).toHaveBeenCalledOnce();
+      it('spends no classifier call on a caller over budget', async () => {
+        rateLimitService.checkLimit.mockResolvedValue({
+          allowed: false,
+          reason: 'Daily limit reached',
+        });
+
+        await handler.execute({ ...baseInput, noteContent: SECURITY_NOTE });
+
+        expect(classifier.classify).not.toHaveBeenCalled();
+      });
     });
 
     it('should record usage as fire-and-forget', async () => {
@@ -272,6 +341,9 @@ describe('GenerateArtifactHandler', () => {
       const emitting = new GenerateArtifactHandler(
         repository as unknown as ArtifactWriteRepository,
         pipeline,
+        new NoteContentGuard(
+          classifier as unknown as InjectionClassifierService
+        ),
         { emit } as unknown as EventEmitter2
       );
 
