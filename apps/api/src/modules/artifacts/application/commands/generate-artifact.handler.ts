@@ -1,5 +1,5 @@
 import { estimateTokenCount, sanitizeContent } from '@jovandyaz/llm-router';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType } from 'zod';
@@ -29,6 +29,7 @@ import {
   summaryOutputSchema,
 } from '../../domain/schemas/artifact-output.schemas';
 import { AIGenerationPipeline } from '../services/ai-generation.pipeline';
+import { NoteContentGuard } from '../services/note-content-guard';
 
 interface GenerateArtifactInput {
   execution: AiExecutionContext;
@@ -63,10 +64,13 @@ const MAX_CONTENT_CHARS = 48_000;
 
 @Injectable()
 export class GenerateArtifactHandler {
+  private readonly logger = new Logger(GenerateArtifactHandler.name);
+
   constructor(
     @Inject(ARTIFACT_WRITE_REPOSITORY)
     private readonly repository: ArtifactWriteRepository,
     private readonly pipeline: AIGenerationPipeline,
+    private readonly contentGuard: NoteContentGuard,
     private readonly eventEmitter: EventEmitter2
   ) {}
 
@@ -93,6 +97,7 @@ export class GenerateArtifactHandler {
       schema: schema as ZodType,
       estimatedTokens: estimateTokenCount(sanitizedContent),
       logContext: { noteId: input.noteId, type: input.type },
+      screen: () => this.screenNote(sanitizedContent, input),
     });
 
     if (genResult.isErr()) {
@@ -120,5 +125,31 @@ export class GenerateArtifactHandler {
     );
 
     return ok(createResult.value);
+  }
+
+  private async screenNote(
+    content: string,
+    input: GenerateArtifactInput
+  ): Promise<ArtifactDomainError | null> {
+    const screening = await this.contentGuard.screen(content, input.execution);
+    if (!screening.safe) {
+      this.logger.warn({
+        event: 'artifacts.generate.injection_blocked',
+        noteId: input.noteId,
+        type: input.type,
+        score: screening.score,
+        reason: screening.reason,
+      });
+      return ArtifactErrors.promptInjectionDetected();
+    }
+    if (screening.classified > 0) {
+      this.logger.log({
+        event: 'artifacts.generate.injection_cleared',
+        noteId: input.noteId,
+        score: screening.score,
+        classified: screening.classified,
+      });
+    }
+    return null;
   }
 }

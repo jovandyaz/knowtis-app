@@ -15,6 +15,7 @@ import { GetSharedNoteArtifactsHandler } from './application/queries/get-shared-
 import { GetStudySessionHandler } from './application/queries/get-study-session.handler';
 import { GetStudyStatsHandler } from './application/queries/get-study-stats.handler';
 import { AIGenerationPipeline } from './application/services/ai-generation.pipeline';
+import { NoteContentGuard } from './application/services/note-content-guard';
 import { ArtifactsController } from './artifacts.controller';
 import {
   ARTIFACT_READ_REPOSITORY,
@@ -56,6 +57,7 @@ import { SharedNoteArtifactsController } from './shared-note-artifacts.controlle
       useClass: DrizzleQuizAttemptRepository,
     },
     AIGenerationPipeline,
+    NoteContentGuard,
     GenerateArtifactHandler,
     DeleteArtifactHandler,
     ReviewCardHandler,

@@ -17,7 +17,8 @@ import { AIRateLimitService } from './ai-rate-limit.service';
 export const INJECTION_GRAY_ZONE_MIN = 0.3;
 
 const CLASSIFIER_TIMEOUT_MS = 5_000;
-const CLASSIFIER_INPUT_MAX_CHARS = 4_000;
+/** The classifier judges at most this much text; longer input is cut, so callers screening more send windows of it. */
+export const CLASSIFIER_INPUT_MAX_CHARS = 4_000;
 
 const verdictSchema = z.object({ injection: z.boolean() });
 
